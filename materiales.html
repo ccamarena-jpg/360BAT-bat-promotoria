@@ -101,6 +101,8 @@ tr:last-child td{border-bottom:none;}
 .seg button.on{background:var(--accent); color:var(--surface);}
 th.sortable{cursor:pointer; user-select:none;}
 .bar{display:inline-block; height:8px; border-radius:4px; background:var(--ok); vertical-align:middle; margin-right:6px;}
+a.ph{text-decoration:none; font-size:15px; margin-right:4px; white-space:nowrap;}
+a.ph small{font-size:10.5px; color:var(--text-muted); margin-left:2px;}
 .two-col{display:grid; grid-template-columns:repeat(auto-fit,minmax(420px,1fr)); gap:16px;}
 .empty{padding:18px; color:var(--text-muted); font-size:13px;}
 footer{font-size:12px; color:var(--text-muted); border-top:1px solid var(--border); padding-top:12px; margin-top:24px;}
@@ -198,6 +200,9 @@ footer{font-size:12px; color:var(--text-muted); border-top:1px solid var(--borde
     <h2>Implementaciones sin link de foto</h2>
     <p class="sub">Por material: implementaciones registradas (tienda × visita) que no tienen foto en el query. Sirve para reclamar la evidencia al promotor.</p>
     <div class="table-wrap" id="tblSinFoto"></div>
+    <h3 style="font-size:14px;margin:16px 0 4px">Casos sin foto y otras fotos de la visita</h3>
+    <p class="sub" id="sfSub" style="margin-bottom:8px"></p>
+    <div class="table-wrap" id="tblSinFotoDet"></div>
     <div style="margin-top:10px"><button class="btn ghost" id="sfDown" type="button">⬇ Descargar Excel de tiendas sin foto</button></div>
   </section>
 </div>
@@ -336,13 +341,22 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
     var ids = Object.keys(groups).map(Number).filter(function(id){ return groups[id].impl>=0; });
     if(!ids.length) return {error:"No hay columnas de implementación de material."};
 
+    // Fotos "huérfanas" de la visita: subidas en la pregunta de OTRO material (uno que no está marcado como implementado)
+    function orphans(row){
+      var out=[]; ids.forEach(function(oid){
+        var go=groups[oid]; if(clean(row[go.impl])==="1") return;
+        (go.fotos||[]).forEach(function(j){ var u=clean(row[j]); if(/^https?:/i.test(u)) out.push({lab:"Otra pregunta: "+(mats[oid]?mats[oid].name:oid),url:u}); });
+      });
+      return out;
+    }
     var recs = [], visSet = {};
     for(var r=1;r<rows.length;r++){
-      var row = rows[r];
+      var row = rows[r], rowOrph = null;
       var fecha = parseDate(row[iFecha]); if(!fecha) continue;
       if(HIST_CUT && fecha<HIST_CUT) continue;   // fuera del historial configurado
       var store = clean(row[iStore]); if(!store) continue;
       var base = {
+        key: store+"|"+ymd(fecha),
         fecha:fecha, mes: fecha.getFullYear()+"-"+pad(fecha.getMonth()+1),
         store:store, tienda:clean(row[iName]), cadena:cadenaDe(row[iName]),
         zona:zonaDe(row[iType], row[iReg], row[iUbi]), distrito:clean(row[iDist]), promotor:clean(row[iAud])
@@ -361,6 +375,7 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
         var fcols = (g.fotos||[]).concat(g.extra);
         for(var c2=0;c2<fcols.length && !foto;c2++){ var v=clean(row[fcols[c2]]); if(/^https?:/i.test(v)) foto=v; }
         var o = Object.assign({}, base); o.mat=id; o.impl=impl; o.tipo=tipo; o.com=com; o.foto=foto;
+        if(impl===1 && !foto){ if(rowOrph===null) rowOrph=orphans(row); o.otras=rowOrph; }   // solo los casos sin foto necesitan buscar otras
         recs.push(o);
       }
       if(any) visSet[store+"|"+ymd(fecha)] = 1;
@@ -387,12 +402,20 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
         iPer=head.findIndex(function(c){ return /permiti/i.test(c) && !/-(OPCION|FOTO)$/i.test(c) && !/_comentario$/i.test(c); }),
         iOpAb=head.findIndex(function(c){ return /^local-abierto-OPCION$/i.test(c); }),
         iOpPer=head.findIndex(function(c){ return /permiti/i.test(c) && /-OPCION$/i.test(c); }),
-        iComOp=head.findIndex(function(c){ return /^COMENTARIO_OPCION$/i.test(c); });
+        iComOp=head.findIndex(function(c){ return /^COMENTARIO_OPCION$/i.test(c); }),
+        // fotos de la visita (panorámica = foto al marcar «local abierto»), para ofrecerlas como evidencia alterna
+        iFPan=head.findIndex(function(c){ return /^local-abierto-FOTO$/i.test(c); }),
+        iFCnt=head.findIndex(function(c){ return /^Foto counter-FOTO$/i.test(c); }),
+        iFReg=head.findIndex(function(c){ return /^Registro Inicial-FOTO$/i.test(c); }),
+        iFPer=head.findIndex(function(c){ return /permiti/i.test(c) && /-FOTO$/i.test(c); });
     function txt(row,i){ var v=i>=0?clean(row[i]):""; return (v==="null"||v==="0"||/^https?:/i.test(v))?"":v; }
-    var recs=[];
+    function purl(row,i){ var v=i>=0?clean(row[i]):""; return /^https?:/i.test(v)?v:""; }
+    var recs=[], fotosV={};
     for(var r=1;r<rows.length;r++){
       var row=rows[r]; var f=parseDate(row[iF]); if(!f) continue;
       if(HIST_CUT && f<HIST_CUT) continue;   // fuera del historial configurado
+      var fp={pan:purl(row,iFPan),counter:purl(row,iFCnt),registro:purl(row,iFReg),permitio:purl(row,iFPer)};
+      if(fp.pan||fp.counter||fp.registro||fp.permitio) fotosV[clean(row[iS])+"|"+ymd(f)]=fp;
       var abierto = clean(row[iAb]), per = iPer>=0 ? clean(row[iPer]) : "1";
       if(abierto==="1" && per!=="0") continue;     // visita efectiva: no entra a la tabla de motivos
       var motivo = abierto==="0" ? txt(row,iOpAb) : txt(row,iOpPer);
@@ -400,7 +423,7 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
       recs.push({ fecha:f, store:clean(row[iS]), tienda:clean(row[iN]), cadena:cadenaDe(row[iN]),
         zona:zonaDe(row[iT],row[iR],row[iU]), promotor:clean(row[iA]), motivo:motivo });
     }
-    return { recs:recs };
+    return { recs:recs, fotos:fotosV };
   }
 
   /* ───────── filtros ───────── */
@@ -502,9 +525,28 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
       return true;
     }).sort(function(a,b){ return b.fecha-a.fecha; });
   }
+  /* Otras fotos de la misma visita (misma tienda y fecha): panorámica, counter, registro inicial y «permitió» de Información General,
+     más las que subieron en la pregunta de otro material. Sirven para revisar a mano un caso que no tiene foto propia. */
+  function visitFotos(r){
+    var out=[], seen={};
+    function add(l,u){ if(u && !seen[u]){ seen[u]=1; out.push({lab:l,url:u}); } }
+    var f=INFO && INFO.fotos && INFO.fotos[r.key];
+    if(f){ add("Panorámica",f.pan); add("Counter",f.counter); add("Registro inicial",f.registro); add("Permitió",f.permitio); }
+    (r.otras||[]).forEach(function(o){ add(o.lab,o.url); });
+    return out;
+  }
+  function fotosHtml(list){
+    var ico={"Panorámica":"🏪","Counter":"📦","Registro inicial":"📝","Permitió":"✅"};
+    return list.map(function(x){ var i=ico[x.lab]||"🖼️", t=x.lab.replace("Otra pregunta: ","otra: ");
+      return '<a class="ph" href="'+esc(x.url)+'" target="_blank" rel="noopener" title="'+esc(x.lab)+'">'+i+'<small>'+esc(t.length>30?t.slice(0,29)+"…":t)+'</small></a>'; }).join(" ");
+  }
   function recExcel(rows){
-    return rows.map(function(r){ return {FECHA:ymd(r.fecha), STORE_ID:r.store, TIENDA:r.tienda, CADENA:r.cadena, ZONA:r.zona, DISTRITO:r.distrito, PROMOTOR:r.promotor,
-      MATERIAL:matLabel(r.mat), ID_MATERIAL:r.mat, ESTADO:r.impl===1?"Implementado":"No implementado", TIPO:r.tipo, MOTIVO:r.com, FOTO:r.foto||"SIN FOTO"}; });
+    return rows.map(function(r){
+      var vf=visitFotos(r); function pick(l){ var x=vf.filter(function(a){ return a.lab===l; })[0]; return x?x.url:""; }
+      return {FECHA:ymd(r.fecha), STORE_ID:r.store, TIENDA:r.tienda, CADENA:r.cadena, ZONA:r.zona, DISTRITO:r.distrito, PROMOTOR:r.promotor,
+      MATERIAL:matLabel(r.mat), ID_MATERIAL:r.mat, ESTADO:r.impl===1?"Implementado":"No implementado", TIPO:r.tipo, MOTIVO:r.com, FOTO:r.foto||"SIN FOTO",
+      "FOTO PANORÁMICA":pick("Panorámica"), "FOTO COUNTER":pick("Counter"), "FOTO REGISTRO INICIAL":pick("Registro inicial"), "FOTO PERMITIÓ":pick("Permitió"),
+      "OTRAS FOTOS (OTRA PREGUNTA)":vf.filter(function(a){ return a.lab.indexOf("Otra pregunta")===0; }).map(function(a){ return a.lab.replace("Otra pregunta: ","")+" → "+a.url; }).join(" | ")}; });
   }
   function downloadRows(rows, name){
     if(!rows.length){ setStatus("No hay filas para descargar con los filtros actuales.","err"); return; }
@@ -516,7 +558,7 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
     $("tblDetalle").innerHTML = det.length ? '<table><thead><tr><th>Fecha</th><th>Tienda</th><th>Cadena</th><th>Zona</th><th>Promotor</th><th>Material</th><th>Estado</th><th>Tipo / motivo</th><th>Foto</th></tr></thead><tbody>'+
       det.slice(0,MAX).map(function(r){
         var st = r.impl===1 ? '<span class="pill ok">Implementado</span>' : '<span class="pill crit">No impl.</span>';
-        var ft = r.foto ? '<a href="'+esc(r.foto)+'" target="_blank" rel="noopener" title="Abrir foto">📷</a>' : (r.impl===1?'<span class="pill warn">Sin foto</span>':'');
+        var ft = r.foto ? '<a href="'+esc(r.foto)+'" target="_blank" rel="noopener" title="Abrir foto">📷</a>' : (r.impl===1?'<span class="pill warn">Sin foto</span> '+fotosHtml(visitFotos(r)):'');
         return '<tr><td class="mono">'+ymd(r.fecha)+'</td><td>'+esc(r.tienda||r.store)+'</td><td>'+esc(r.cadena)+'</td><td>'+esc(r.zona)+'</td><td>'+esc(r.promotor)+'</td><td>'+esc(matLabel(r.mat))+'</td><td>'+st+'</td><td>'+esc(r.impl===1?(r.tipo||"—"):(r.com||"—"))+'</td><td>'+ft+'</td></tr>'; }).join("")+'</tbody></table>'
       : '<div class="empty">Sin registros con ese filtro.</div>';
     reportHeight();
@@ -530,6 +572,14 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
       ids.map(function(k){ var g=by[k]; var p=pct(g.sin,g.n);
         return '<tr><td>'+esc(matLabel(k))+'</td><td class="num mono">'+g.n+'</td><td class="num mono">'+(g.n-g.sin)+'</td><td class="num mono">'+g.sin+'</td><td class="num mono"><span class="pill '+(p>=30?'crit':p>=10?'warn':'ok')+'">'+p.toFixed(1)+'%</span></td><td class="num mono">'+Object.keys(g.stores).length+'</td></tr>'; }).join("")+
       '<tr><td><b>Total</b></td><td class="num mono"><b>'+tot.n+'</b></td><td class="num mono"><b>'+(tot.n-tot.s)+'</b></td><td class="num mono"><b>'+tot.s+'</b></td><td class="num mono"><b>'+pct(tot.s,tot.n).toFixed(1)+'%</b></td><td></td></tr></tbody></table>';
+    // detalle de los casos sin foto propia, con las otras fotos de esa visita para revisarlas a mano
+    var casos=lastRecs.filter(function(r){ return r.impl===1 && !r.foto; }).sort(function(a,b){ return b.fecha-a.fecha; }), MAXC=300;
+    var conOtras=casos.filter(function(r){ return visitFotos(r).length; }).length;
+    $("sfSub").textContent=casos.length.toLocaleString("es-PE")+" casos sin foto propia · "+conOtras.toLocaleString("es-PE")+" tienen al menos otra foto de la visita"+(INFO?"":" (carga Información General para ver la panorámica y el counter)")+(casos.length>MAXC?" · se muestran "+MAXC+" (el Excel baja todos)":"");
+    $("tblSinFotoDet").innerHTML = !casos.length ? '<div class="empty">Sin casos en el periodo.</div>' :
+      '<table><thead><tr><th>Fecha</th><th>Tienda</th><th>Material</th><th>Promotor</th><th>Otras fotos de la visita</th></tr></thead><tbody>'+
+      casos.slice(0,MAXC).map(function(r){ var f=visitFotos(r);
+        return '<tr><td class="mono">'+ymd(r.fecha)+'</td><td>'+esc(r.tienda||r.store)+'</td><td>'+esc(matLabel(r.mat))+'</td><td>'+esc(r.promotor)+'</td><td>'+(f.length?fotosHtml(f):'<span class="pill crit">Sin ninguna foto</span>')+'</td></tr>'; }).join("")+'</tbody></table>';
   }
   function applyView(){
     $("pies").hidden = view!=="graf";
@@ -693,7 +743,7 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
   }
   /* Caché local de lo ya procesado (IndexedDB): si el archivo no cambió en SharePoint, no se descarga ni se procesa de nuevo.
      Subir PARSER_V cuando cambie la lógica de lectura, para invalidar lo guardado. */
-  var PARSER_V="1";
+  var PARSER_V="2";
   function idb(){ return new Promise(function(res,rej){ try{ var rq=indexedDB.open("bat360cache",1); rq.onupgradeneeded=function(){ rq.result.createObjectStore("kv"); }; rq.onsuccess=function(){ res(rq.result); }; rq.onerror=function(){ rej(rq.error); }; }catch(e){ rej(e); } }); }
   function cacheGet(k){ return idb().then(function(db){ return new Promise(function(res){ var r=db.transaction("kv").objectStore("kv").get(k); r.onsuccess=function(){ res(r.result||null); }; r.onerror=function(){ res(null); }; }); }).catch(function(){ return null; }); }
   function cachePut(k,v){ return idb().then(function(db){ return new Promise(function(res){ var tx=db.transaction("kv","readwrite"); tx.objectStore("kv").put(v,k); tx.oncomplete=function(){ res(true); }; tx.onerror=function(){ res(false); }; }); }).catch(function(){ return false; }); }
