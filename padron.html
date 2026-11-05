@@ -124,7 +124,6 @@ tr:last-child td{border-bottom:none;}
     <div class="filter-field"><label>Día de visita</label><div class="ms" id="msDia"></div></div>
     <div class="filter-field"><label>Frecuencia</label><div class="ms" id="msFre"></div></div>
     <div class="filter-field"><label for="fRuta">Tiendas</label><select id="fRuta"><option value="con">Con promotor (ruteadas)</option><option value="sin">Sin promotor</option><option value="todas">Todas</option></select></div>
-    <div class="filter-field"><label for="fVig">Columnas del padrón</label><select id="fVig"></select></div>
     <div class="filter-field"><label for="qBuscar">Buscar</label><input type="search" id="qBuscar" placeholder="Tienda, código, dirección…" style="min-width:220px"></div>
   </div>
   <div class="kpi-strip" id="kpisP"></div>
@@ -230,11 +229,10 @@ tr:last-child td{border-bottom:none;}
           ciu:msBuild($("msCiu"),"Ciudad",function(){ renderP(); }), dis:msBuild($("msDis"),"Distrito",function(){ renderP(); }),
           dia:msBuild($("msDia"),"Día",function(){ renderP(); }), fre:msBuild($("msFre"),"Frecuencia",function(){ renderP(); }) };
   var pView="tabla", pSort={k:"promotor",d:1}, pShown=[];
-  function tcur(r){ return r.t[+$("fVig").value] || r.t[r.t.length-1]; }
+  // El padrón vigente siempre usa las columnas más recientes del archivo (las de mayo, etc. quedan para el Histórico); no hay selector.
+  function tcur(r){ return r.t[r.t.length-1]; }
   function applyPadron(p, mod){
     PAD=p; PAD_MOD=mod; showApp(); modLine();
-    $("fVig").innerHTML=p.labels.map(function(l,i){ return '<option value="'+i+'">'+esc(l)+'</option>'; }).join("");
-    $("fVig").value=String(lastTi(p));
     var rows=p.rows;
     P.pro.set(uniq(rows.map(function(r){ return tcur(r).promotor; }))); P.cad.set(uniq(rows.map(function(r){ return r.cadena; })));
     P.ciu.set(uniq(rows.map(function(r){ return r.provincia; }))); P.dis.set(uniq(rows.map(function(r){ return r.distrito; })));
@@ -277,7 +275,7 @@ tr:last-child td{border-bottom:none;}
   $("pDown").addEventListener("click",function(){
     xls(pShown.map(function(r){ var t=tcur(r); return {PROMOTOR:t.promotor,STORE_ID:r.store,TIENDA:r.estacion,CADENA:r.cadena,DIRECCION:r.direccion,DISTRITO:r.distrito,CIUDAD:r.provincia,ZONA:r.zona,DIA:cap(t.dia),FRECUENCIA:t.frec,LATITUD:r.lat,LONGITUD:r.lon}; }),"padron-filtrado.xlsx","PADRON");
   });
-  ["fZona","fRuta","fVig"].forEach(function(id){ $(id).addEventListener("change",function(){ if(id==="fVig"&&PAD){ P.pro.set(uniq(PAD.rows.map(function(r){return tcur(r).promotor;}))); P.dia.set(uniq(PAD.rows.map(function(r){return cap(tcur(r).dia);})).sort(function(a,b){ return BAT.DIAS.indexOf(norm(a))-BAT.DIAS.indexOf(norm(b)); })); P.fre.set(uniq(PAD.rows.map(function(r){return tcur(r).frec;}))); } renderP(); }); });
+  ["fZona","fRuta"].forEach(function(id){ $(id).addEventListener("change",renderP); });
   $("qBuscar").addEventListener("input",renderP);
   $("segP").addEventListener("click",function(e){ var b=e.target.closest("button[data-v]"); if(!b) return; pView=b.getAttribute("data-v");
     [].forEach.call($("segP").querySelectorAll("button"),function(x){ x.classList.toggle("on",x===b); });
