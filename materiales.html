@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Materiales · BAT 360</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#f4f6fa; --surface:#FFFFFF; --surface-2:#f2f5fa; --text:#1b2a47; --text-muted:#6c7a92; --border:#dde4ee;
+  --accent:#1d3b78; --accent-soft:#e2ecfb; --ok:#1f9d57; --ok-bg:#e0f5e8; --warn:#a9760a; --warn-bg:#fcf0d6;
+  --crit:#d6453d; --crit-bg:#fbe3e1; --pend:#b7c0cf;
+  --shadow: 0 1px 3px rgba(21,38,74,.06), 0 4px 14px rgba(21,38,74,.05);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#16181A; --surface:#1F2224; --surface-2:#26292B; --text:#EDEBE5; --text-muted:#9C9A92; --border:#33363A;
+    --accent:#7FB4D4; --accent-soft:#20343E; --ok:#6FCB99; --ok-bg:#173425; --warn:#E3B15C; --warn-bg:#3A2C10;
+    --crit:#EF8A83; --crit-bg:#3D1E1C; --pend:#5b6270; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#16181A; --surface:#1F2224; --surface-2:#26292B; --text:#EDEBE5; --text-muted:#9C9A92; --border:#33363A;
+  --accent:#7FB4D4; --accent-soft:#20343E; --ok:#6FCB99; --ok-bg:#173425; --warn:#E3B15C; --warn-bg:#3A2C10;
+  --crit:#EF8A83; --crit-bg:#3D1E1C; --pend:#5b6270; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box;}
+body{background:var(--bg); color:var(--text); font-family:"IBM Plex Sans",'Segoe UI',system-ui,sans-serif;
+  padding-inline:18px; padding-block:14px 28px; max-width:1180px; margin:0 auto;}
+.mono{font-family:"IBM Plex Mono", ui-monospace, monospace; font-variant-numeric:tabular-nums;}
+h1,h2,h3{text-wrap:balance; margin:0;}
+a{color:var(--accent);}
+header.top{display:flex; flex-wrap:wrap; gap:16px 24px; justify-content:space-between; align-items:flex-start;
+  padding-bottom:18px; border-bottom:1px solid var(--border); margin-bottom:18px;}
+.brand{display:flex; flex-direction:column; gap:4px; min-width:220px;}
+.brand .eyebrow{font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-muted); font-weight:600;}
+.brand h1{font-size:26px; font-weight:700;}
+.brand p{margin:2px 0 0; color:var(--text-muted); font-size:13.5px; max-width:52ch;}
+.upload-panel{display:flex; flex-direction:column; gap:8px; background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; padding:14px 16px; box-shadow:var(--shadow); min-width:280px; flex:1 1 320px; max-width:460px;}
+.upload-row{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+.btn{background:var(--accent); color:var(--surface); border:none; border-radius:8px; padding:9px 14px;
+  font-family:inherit; font-weight:600; font-size:13.5px; cursor:pointer;}
+.btn.ghost{background:transparent; color:var(--accent); border:1px solid var(--accent);}
+.btn:hover{filter:brightness(1.06);}
+.file-name{font-size:12.5px; color:var(--text-muted); word-break:break-all;}
+input[type=file]{display:none;}
+.status-line{font-size:12.5px; color:var(--text-muted);}
+.status-line.err{color:var(--crit);} .status-line.ok{color:var(--ok);}
+.empty-banner{display:flex; gap:10px; align-items:center; background:var(--accent-soft); color:var(--accent);
+  border:1px solid var(--accent); border-radius:10px; padding:12px 16px; font-size:13.5px; margin-bottom:20px;}
+.filter-bar{display:flex; flex-wrap:wrap; gap:12px 16px; align-items:flex-end; background:var(--surface);
+  border:1px solid var(--border); border-radius:12px; padding:12px 16px; box-shadow:var(--shadow); margin-bottom:10px;}
+.filter-field{display:flex; flex-direction:column; gap:4px;}
+.filter-field label{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); font-weight:600;}
+.filter-field select, .filter-field input[type=date]{font-family:inherit; font-size:13px; padding:7px 10px; border-radius:8px;
+  border:1px solid var(--border); background:var(--bg); color:var(--text); min-width:150px;}
+.filter-hint{font-size:12px; color:var(--text-muted); margin:0 0 16px;}
+.ms{position:relative;}
+.ms-btn{font-family:inherit; font-size:13px; padding:7px 10px; border-radius:8px; border:1px solid var(--border);
+  background:var(--bg); color:var(--text); min-width:200px; text-align:left; cursor:pointer; display:flex; gap:8px; align-items:center;}
+.ms-btn .caret{margin-left:auto; color:var(--text-muted);}
+.ms-panel{position:absolute; z-index:30; top:calc(100% + 4px); left:0; min-width:280px; max-height:320px; overflow:auto;
+  background:var(--surface); border:1px solid var(--border); border-radius:10px; box-shadow:var(--shadow); padding:6px;}
+.ms-panel label{display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:6px; font-size:13px; color:var(--text);
+  cursor:pointer; font-weight:500; text-transform:none; letter-spacing:0;}
+.ms-panel label:hover{background:var(--surface-2);}
+.ms-panel .ms-sep{height:1px; background:var(--border); margin:5px 2px;}
+.ms-panel input[type=checkbox]{margin:0; accent-color:var(--accent);}
+.kpi-strip{display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:12px; margin-bottom:22px;}
+.kpi{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; box-shadow:var(--shadow);}
+.kpi .k-label{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); font-weight:600;}
+.kpi .k-value{font-size:26px; font-weight:700; margin-top:4px;}
+.kpi .k-sub{font-size:12px; color:var(--text-muted); margin-top:2px;}
+section.block{margin-bottom:26px;}
+section.block > h2, section.block > div > h2{font-size:17px; margin-bottom:4px;}
+section.block .sub{font-size:12.5px; color:var(--text-muted); margin:0 0 12px;}
+.pie-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(230px,1fr)); gap:14px;}
+.pie-card{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px; box-shadow:var(--shadow);
+  display:flex; flex-direction:column; gap:8px;}
+.pie-card h3{font-size:13px; font-weight:600; line-height:1.3; min-height:34px;}
+.pie-card h3 small{display:block; color:var(--text-muted); font-weight:500; font-size:11px;}
+.pie-wrap{position:relative; height:150px;}
+.legend-row{display:flex; flex-wrap:wrap; gap:4px 10px; font-size:12px;}
+.legend-row span{display:inline-flex; gap:5px; align-items:center;}
+.dot{width:9px; height:9px; border-radius:50%; display:inline-block;}
+.chips{display:flex; flex-wrap:wrap; gap:4px;}
+.chip{font-size:11px; padding:2px 7px; border-radius:999px; background:var(--surface-2); color:var(--text-muted); border:1px solid var(--border);}
+.table-wrap{background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); overflow:auto; max-height:520px;}
+table{border-collapse:collapse; width:100%; font-size:13px;}
+th,td{padding:8px 12px; text-align:left; border-bottom:1px solid var(--border); vertical-align:top;}
+th{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); background:var(--surface-2); position:sticky; top:0;}
+td.num, th.num{text-align:right;}
+tr:last-child td{border-bottom:none;}
+.sec-head{display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; justify-content:space-between; margin-bottom:4px;}
+.sec-head h2{margin:0;}
+.seg{display:inline-flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:var(--surface);}
+.seg button{font-family:inherit; font-size:12.5px; font-weight:600; padding:6px 12px; border:none; background:transparent; color:var(--text-muted); cursor:pointer;}
+.seg button.on{background:var(--accent); color:var(--surface);}
+th.sortable{cursor:pointer; user-select:none;}
+.bar{display:inline-block; height:8px; border-radius:4px; background:var(--ok); vertical-align:middle; margin-right:6px;}
+.two-col{display:grid; grid-template-columns:repeat(auto-fit,minmax(420px,1fr)); gap:16px;}
+.empty{padding:18px; color:var(--text-muted); font-size:13px;}
+footer{font-size:12px; color:var(--text-muted); border-top:1px solid var(--border); padding-top:12px; margin-top:24px;}
+[hidden]{display:none !important;}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <span class="eyebrow">BAT 360 · Promotoría</span>
+    <h1>Avance de materiales</h1>
+    <p>Implementación por material, mes, cadena y zona (Lima / KC / NKC), con motivos de no implementación y de no cobertura.</p>
+  </div>
+  <div class="upload-panel">
+    <div class="upload-row" id="msRow" hidden>
+      <button class="btn" id="msConnectBtn" type="button">🔗 Conectar con SharePoint</button>
+      <button class="btn ghost" id="msRefreshBtn" type="button" hidden>↻ Actualizar</button>
+      <span class="file-name" id="msUser"></span>
+    </div>
+    <div class="upload-row">
+      <label class="btn ghost" for="fileInput">📂 Cargar 582-EJECUCIÓN-POP.xlsx</label>
+      <input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls">
+      <label class="btn ghost" for="infoInput">📂 Cargar Información General</label>
+      <input type="file" id="infoInput" accept=".xlsx,.xlsm,.xls">
+    </div>
+    <div class="file-name" id="fileName">Sin archivo cargado</div>
+    <div class="file-name" id="modLine" title="Hora de la última modificación de cada archivo en SharePoint (o en tu equipo si lo cargaste a mano)"></div>
+    <div class="status-line" id="statusLine"></div>
+  </div>
+</header>
+
+<div class="empty-banner" id="emptyBanner">
+  <span>📦</span>
+  <span>Conecta con SharePoint (o carga el Excel <b>582-EJECUCIÓN-POP</b>) para ver el avance. Los materiales de cada mes se definen en <code>config/materiales.json</code>.</span>
+</div>
+
+<div id="app" hidden>
+  <div class="filter-bar">
+    <div class="filter-field"><label for="fMes">Mes</label><select id="fMes"></select></div>
+    <div class="filter-field"><label for="fAlcance">Materiales</label>
+      <select id="fAlcance"><option value="mes">Los del mes (configuración)</option><option value="todos">Ver todos</option></select></div>
+    <div class="filter-field"><label>Material</label><div class="ms" id="msMat"></div></div>
+    <div class="filter-field"><label>Cadena</label><div class="ms" id="msCad"></div></div>
+    <div class="filter-field"><label for="fZona">Zona</label>
+      <select id="fZona"><option value="">Todas</option><option>LIMA</option><option>KC</option><option>NKC</option></select></div>
+    <div class="filter-field"><label for="fDesde">Desde</label><input type="date" id="fDesde"></div>
+    <div class="filter-field"><label for="fHasta">Hasta</label><input type="date" id="fHasta"></div>
+  </div>
+  <p class="filter-hint" id="filterHint"></p>
+
+  <div class="kpi-strip" id="kpis"></div>
+
+  <section class="block">
+    <div class="sec-head">
+      <h2>Avance por material</h2>
+      <div class="seg" id="viewSeg" role="group" aria-label="Vista">
+        <button type="button" data-v="graf" class="on">📊 Gráficos</button>
+        <button type="button" data-v="tabla">📋 Tabla</button>
+      </div>
+    </div>
+    <p class="sub">Se cuentan <b>tiendas</b>. El <b>avance</b> compara las tiendas con el material puesto contra el <b>universo</b>: por defecto, las tiendas distintas del archivo (según cadena y zona filtradas); para un material que solo aplica a algunas tiendas, fija su <code>meta</code> en <code>config/materiales.json</code>. La <b>efectividad</b> solo mira las tiendas ya visitadas con ese material. El gris son las tiendas pendientes. Los chips indican el tipo de implementación.</p>
+    <div class="pie-grid" id="pies"></div>
+    <div class="table-wrap" id="tblAvance" hidden></div>
+  </section>
+
+  <section class="block two-col">
+    <div>
+      <h2>Motivos de no implementación</h2>
+      <p class="sub">Visitas donde el material quedó en 0, agrupadas por el motivo que escribió el promotor.</p>
+      <div class="table-wrap" id="tblMotivos"></div>
+    </div>
+    <div>
+      <h2>Motivos de no cobertura</h2>
+      <p class="sub">Visitas no efectivas de <i>Información General</i> (local cerrado, no permitió, etc.).</p>
+      <div class="table-wrap" id="tblCobertura"></div>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2>Detalle por tienda y material</h2>
+    <p class="sub" id="detSub"></p>
+    <div class="filter-bar" style="margin-bottom:10px">
+      <div class="filter-field"><label for="dEstado">Estado</label>
+        <select id="dEstado"><option value="noimpl">No implementados</option><option value="impl">Implementados</option><option value="">Todos</option></select></div>
+      <div class="filter-field"><label for="dFoto">Foto</label>
+        <select id="dFoto"><option value="">Con o sin foto</option><option value="con">Con foto</option><option value="sin">Sin foto</option></select></div>
+      <div class="filter-field"><label for="dBuscar">Buscar</label><input type="search" id="dBuscar" placeholder="Tienda, código, promotor…" style="min-width:240px"></div>
+      <button class="btn ghost" id="dDown" type="button">⬇ Descargar Excel</button>
+    </div>
+    <div class="table-wrap" id="tblDetalle"></div>
+  </section>
+
+  <section class="block">
+    <h2>Implementaciones sin link de foto</h2>
+    <p class="sub">Por material: implementaciones registradas (tienda × visita) que no tienen foto en el query. Sirve para reclamar la evidencia al promotor.</p>
+    <div class="table-wrap" id="tblSinFoto"></div>
+    <div style="margin-top:10px"><button class="btn ghost" id="sfDown" type="button">⬇ Descargar Excel de tiendas sin foto</button></div>
+  </section>
+</div>
+
+<footer>Los archivos se leen en tu navegador con tu cuenta de Microsoft; no se guardan en la plataforma.</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+<script>
+/* Conexión en vivo con SharePoint (Microsoft Graph). Misma app "bat360" de Entra que usa radar.html.
+   Hay que tener registrado https://bat360.vercel.app/materiales.html como Redirect URI (plataforma SPA). */
+window.MAT_MS = {
+  clientId: "2dd44541-d3ac-459c-afa0-aa873590f7e0",
+  tenant:   "9d85a34e-57e5-4f82-9341-7dd9300077b7",
+  scopes:   ["Files.Read.All"],
+  popUrl:   "https://ttauditperu-my.sharepoint.com/:x:/g/personal/acastro_ttauditperu_onmicrosoft_com/IQC3XD0DBBHTTKUIDSqtcqVnAZl4eojITmpAFajAa6sdl5w?e=eAMDDe",
+  infoUrl:  "https://ttauditperu-my.sharepoint.com/:x:/g/personal/acastro_ttauditperu_onmicrosoft_com/IQDl5lLllIOWT74Z3_Ou_6muAZ4PxqwmXMyiqtVAl8TDU-Y?e=x6bLbV"
+};
+// Dentro de BAT 360 Promotoría los links vienen de site-config.js (un solo lugar)
+try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.links;
+  if(L0){ if(L0.popEjecucion) window.MAT_MS.popUrl=L0.popEjecucion; if(L0.infoGeneral) window.MAT_MS.infoUrl=L0.infoGeneral; } }catch(e){}
+</script>
+<script>
+(function(){
+  "use strict";
+
+  /* ───────── utilidades ───────── */
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+  function norm(s){
+    return String(s==null?"":s).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/\s+/g," ").trim();
+  }
+  function clean(s){ return String(s==null?"":s).replace(/[\u00a0\u2007\u202f\s]+/g," ").trim(); }
+  function pad(n){ return (n<10?"0":"")+n; }
+  function ymd(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+  var MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+  var MON3 = {ene:0,feb:1,mar:2,abr:3,may:4,jun:5,jul:6,ago:7,sep:8,set:8,oct:9,nov:10,dic:11};
+  function mesLabel(k){ var p=k.split("-"); return MESES[+p[1]-1]+" "+p[0]; }
+
+  function parseDate(v){
+    if(v instanceof Date && !isNaN(v)) return new Date(v.getFullYear(), v.getMonth(), v.getDate());
+    if(typeof v==="number" && v>20000 && v<80000){
+      var d0 = new Date(Math.round((v-25569)*86400*1000)); return new Date(d0.getUTCFullYear(), d0.getUTCMonth(), d0.getUTCDate());
+    }
+    var s = clean(v); if(!s) return null;
+    var m = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/.exec(s);
+    if(m){ var y=+m[3]; if(y<100) y+=2000; return new Date(y, +m[2]-1, +m[1]); }
+    m = /^(\d{1,2})-([a-z]{3})[a-z]*-(\d{2,4})$/i.exec(s);
+    if(m && MON3[m[2].toLowerCase()]!==undefined){ var y2=+m[3]; if(y2<100) y2+=2000; return new Date(y2, MON3[m[2].toLowerCase()], +m[1]); }
+    m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+    if(m) return new Date(+m[1], +m[2]-1, +m[3]);
+    return null;
+  }
+
+  /* ───────── estado ───────── */
+  var CFG = { meses:{} };
+  var DATA = null;        // { mats:{id:{id,name}}, recs:[...], visitas:n }
+  var INFO = null;        // { recs:[{fecha,tienda,cadena,zona,promotor,motivo}] }
+  var charts = [];
+  var sel = { mat:null, cad:null };   // Set o null = todos
+
+  /* ───────── clasificación del motivo (texto libre → categoría) ───────── */
+  var CATS = [
+    ["Sin stock / no llegó el material", /no lleg|sin stock|stock|agot|falt[oa] (el )?material|sin material|no hay material|no tienen material/],
+    ["Local no permitió / sin autorización", /no permit|no autoriz|no dej|admin|encargad|gerente|supervisor|prohib|no quiso|rechaz|no esta en (su|la) (relacion|lista)|no estoy en|chaleco|casco|epp/],
+    ["Local cerrado / mantenimiento / auditoría", /cerrad|mantenim|repar|remodel|en auditor|local en|clausur|dejo de funcionar|no cuentan con tienda|inventario/],
+    ["Staff ocupado / counter con comida", /ocupad|comida|no se visito/],
+    ["Material dañado / caído", /danad|caid|roto|deterior|mal estado|se cay/],
+    ["No aplica / sin espacio o mueble", /no aplica|espacio|no corresponde|sin mueble|no cuenta con|no tiene (el )?mueble|no hay (el )?mueble/],
+    ["Cambio o reemplazo por otro material", /se cambi|cambio|reempl|por el velo|por otro/]
+  ];
+  function categoria(txt){
+    var t = norm(txt); if(!t) return "Sin motivo registrado";
+    for(var i=0;i<CATS.length;i++) if(CATS[i][1].test(t)) return CATS[i][0];
+    return "Otros motivos";
+  }
+  function cadenaDe(fullname){
+    var f = clean(fullname); if(!f) return "—";
+    var p = f.split(/\s+-\s+/)[0].trim().toUpperCase();
+    return p.length>24 ? p.slice(0,24) : p;
+  }
+  function zonaDe(type, region, ubigeo){
+    // en los queries "region" viene vacío para muchas tiendas KACC de Lima; ahí el departamento está en "ubigeo"
+    var r = norm(region) || norm(ubigeo);
+    if(r==="lima" || r==="callao" || r==="lima metropolitana") return "LIMA";
+    return /kacc/i.test(String(type||"")) ? "KC" : "NKC";
+  }
+
+  /* ───────── lectura: EJECUCIÓN-POP ───────── */
+  function headerRow(ws){
+    var ref = ws["!ref"]; if(!ref) return [];
+    var r = XLSX.utils.decode_range(ref);
+    var rows = XLSX.utils.sheet_to_json(ws,{header:1,range:{s:{r:r.s.r,c:r.s.c},e:{r:r.s.r,c:r.e.c}},defval:"",raw:true});
+    return rows[0] || [];
+  }
+  function parsePop(wb){
+    var sheetName = null;
+    for(var i=0;i<wb.SheetNames.length;i++){
+      var h = headerRow(wb.Sheets[wb.SheetNames[i]]).map(String);
+      var has = h.some(function(c){ return /IMPLEMENTO-id:\d+/i.test(c); }) && h.indexOf("store_id")!==-1;
+      if(has){ sheetName = wb.SheetNames[i]; break; }
+    }
+    if(!sheetName) return {error:"No encontré una hoja con columnas de material (…-IMPLEMENTO-id:NNNN). ¿Es el archivo 582-EJECUCIÓN-POP?"};
+    var rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,defval:"",raw:true,blankrows:false});
+    var head = rows[0].map(String);
+    var col = {}; head.forEach(function(h,i){ if(!(h in col)) col[h]=i; });
+    function ci(n){ return col[n]!==undefined ? col[n] : -1; }
+    var iStore=ci("store_id"), iName=ci("fullname"), iType=ci("type"), iReg=ci("region"), iDist=ci("district"),
+        iAud=ci("auditor"), iFecha=ci("fecha"), iUbi=ci("ubigeo");
+    if(iStore<0||iFecha<0) return {error:"Faltan las columnas store_id / fecha."};
+
+    var mats = {}, groups = {};
+    head.forEach(function(h,i){
+      // columnas de foto del Excel real: "NOMBRE-IMPLEMENTO-id-7363-FOTO" (guion después de "id", no dos puntos)
+      var mf = /^(.*)-IMPLEMENTO-id[-:](\d+)-FOTO/i.exec(h);
+      if(mf){ var fid=+mf[2]; var fg=groups[fid]||(groups[fid]={impl:-1,coms:[],ops:[],extra:[],fotos:[]}); fg.fotos.push(i); return; }
+      var m = /^(.*)-IMPLEMENTO-id:(\d+)(.*)$/i.exec(h); if(!m) return;
+      var id = +m[2], suf = m[3] || "";
+      if(!mats[id]) mats[id] = { id:id, name:clean(m[1]) };
+      var g = groups[id] || (groups[id] = {impl:-1, coms:[], ops:[], extra:[], fotos:[]});
+      if(!g.fotos) g.fotos=[];
+      if(suf==="") g.impl = i;
+      else if(/^-comment/i.test(suf)) g.coms.push(i);
+      else if(/^-opcion/i.test(suf)) g.ops.push(i);
+      else g.extra.push(i);
+    });
+    var ids = Object.keys(groups).map(Number).filter(function(id){ return groups[id].impl>=0; });
+    if(!ids.length) return {error:"No hay columnas de implementación de material."};
+
+    var recs = [], visSet = {};
+    for(var r=1;r<rows.length;r++){
+      var row = rows[r];
+      var fecha = parseDate(row[iFecha]); if(!fecha) continue;
+      var store = clean(row[iStore]); if(!store) continue;
+      var base = {
+        fecha:fecha, mes: fecha.getFullYear()+"-"+pad(fecha.getMonth()+1),
+        store:store, tienda:clean(row[iName]), cadena:cadenaDe(row[iName]),
+        zona:zonaDe(row[iType], row[iReg], row[iUbi]), distrito:clean(row[iDist]), promotor:clean(row[iAud])
+      };
+      var any = false;
+      for(var k=0;k<ids.length;k++){
+        var id = ids[k], g = groups[id];
+        var raw = row[g.impl]; var s = clean(raw);
+        if(s==="") continue;
+        var impl = (s==="1"||/^s[ií]$/i.test(s)) ? 1 : (s==="0"||/^no$/i.test(s)) ? 0 : -1;
+        if(impl<0) continue;
+        any = true;
+        var tipo="", com="", foto="";
+        for(var a=0;a<g.ops.length && !tipo;a++) tipo = clean(row[g.ops[a]]);
+        for(var b=0;b<g.coms.length && !com;b++) com = clean(row[g.coms[b]]);
+        var fcols = (g.fotos||[]).concat(g.extra);
+        for(var c2=0;c2<fcols.length && !foto;c2++){ var v=clean(row[fcols[c2]]); if(/^https?:/i.test(v)) foto=v; }
+        var o = Object.assign({}, base); o.mat=id; o.impl=impl; o.tipo=tipo; o.com=com; o.foto=foto;
+        recs.push(o);
+      }
+      if(any) visSet[store+"|"+ymd(fecha)] = 1;
+    }
+    return { mats:mats, recs:recs, visitas:Object.keys(visSet).length, sheet:sheetName };
+  }
+
+  /* ───────── lectura: Información General (visitas no efectivas) ───────── */
+  function parseInfo(wb){
+    var best=null;
+    for(var i=0;i<wb.SheetNames.length;i++){
+      var h = headerRow(wb.Sheets[wb.SheetNames[i]]).map(String);
+      if(h.indexOf("store_id")!==-1 && h.some(function(c){ return /local-abierto/i.test(c); })){ best=wb.SheetNames[i]; break; }
+    }
+    if(!best) return {error:"No encontré una hoja con 'local-abierto' (Información General)."};
+    var rows = XLSX.utils.sheet_to_json(wb.Sheets[best],{header:1,defval:"",raw:true,blankrows:false});
+    var head = rows[0].map(String);
+    function find(re){ for(var i=0;i<head.length;i++) if(re.test(head[i])) return i; return -1; }
+    var iF=head.indexOf("fecha"), iN=head.indexOf("fullname"), iT=head.indexOf("type"), iR=head.indexOf("region"), iU=head.indexOf("ubigeo"),
+        iA=head.indexOf("auditor"), iS=head.indexOf("store_id"),
+        iAb=head.findIndex(function(c){ return /^local-abierto$/i.test(c); }),
+        // columnas reales de 582-INFORMACIÓN GENERAL: "¿Permitió realizar auditoría en counter?" (1/0),
+        // local-abierto-OPCION / ...counter?-OPCION (motivo elegido) y COMENTARIO_OPCION (texto libre si eligió "Otro motivo")
+        iPer=head.findIndex(function(c){ return /permiti/i.test(c) && !/-(OPCION|FOTO)$/i.test(c) && !/_comentario$/i.test(c); }),
+        iOpAb=head.findIndex(function(c){ return /^local-abierto-OPCION$/i.test(c); }),
+        iOpPer=head.findIndex(function(c){ return /permiti/i.test(c) && /-OPCION$/i.test(c); }),
+        iComOp=head.findIndex(function(c){ return /^COMENTARIO_OPCION$/i.test(c); });
+    function txt(row,i){ var v=i>=0?clean(row[i]):""; return (v==="null"||v==="0"||/^https?:/i.test(v))?"":v; }
+    var recs=[];
+    for(var r=1;r<rows.length;r++){
+      var row=rows[r]; var f=parseDate(row[iF]); if(!f) continue;
+      var abierto = clean(row[iAb]), per = iPer>=0 ? clean(row[iPer]) : "1";
+      if(abierto==="1" && per!=="0") continue;     // visita efectiva: no entra a la tabla de motivos
+      var motivo = abierto==="0" ? txt(row,iOpAb) : txt(row,iOpPer);
+      if(!motivo || /^otro/i.test(motivo)) motivo = txt(row,iComOp) || motivo;
+      recs.push({ fecha:f, store:clean(row[iS]), tienda:clean(row[iN]), cadena:cadenaDe(row[iN]),
+        zona:zonaDe(row[iT],row[iR],row[iU]), promotor:clean(row[iA]), motivo:motivo });
+    }
+    return { recs:recs };
+  }
+
+  /* ───────── filtros ───────── */
+  function msBuild(host, label, onChange){
+    host.innerHTML = '<button type="button" class="ms-btn"><span class="ms-txt"></span><span class="caret">▾</span></button><div class="ms-panel" hidden></div>';
+    var btn=host.querySelector(".ms-btn"), panel=host.querySelector(".ms-panel");
+    btn.addEventListener("click", function(e){ e.stopPropagation(); panel.hidden=!panel.hidden; });
+    document.addEventListener("click", function(e){ if(!host.contains(e.target)) panel.hidden=true; });
+    return {
+      set:function(items){
+        panel.innerHTML = '<label><input type="checkbox" data-all checked> <b>Todos</b></label><div class="ms-sep"></div>' +
+          items.map(function(it){ return '<label><input type="checkbox" value="'+esc(it.v)+'" checked> '+esc(it.t)+'</label>'; }).join("");
+        var all=panel.querySelector("[data-all]"), boxes=[].slice.call(panel.querySelectorAll("input[value]"));
+        function get(){ var chk=boxes.filter(function(b){return b.checked;}); return chk.length===boxes.length ? null : new Set(chk.map(function(b){return b.value;})); }
+        function sync(){
+          var n=boxes.filter(function(b){return b.checked;}).length;
+          all.checked = n===boxes.length;
+          host.querySelector(".ms-txt").textContent = n===boxes.length ? label+": todos" : n===0 ? label+": ninguno" : label+": "+n+" de "+boxes.length;
+        }
+        all.addEventListener("change", function(){ boxes.forEach(function(b){b.checked=all.checked;}); sync(); onChange(get()); });
+        boxes.forEach(function(b){ b.addEventListener("change", function(){ sync(); onChange(get()); }); });
+        sync();
+      }
+    };
+  }
+  var msMat, msCad;
+
+  function monthsAvail(){
+    var set = {}; Object.keys(CFG.meses||{}).forEach(function(k){ set[k]=1; });
+    if(DATA) DATA.recs.forEach(function(r){ set[r.mes]=1; });
+    return Object.keys(set).sort().reverse();
+  }
+  function setMonthDates(mes){
+    if(!mes){ $("fDesde").value=""; $("fHasta").value=""; return; }
+    var p=mes.split("-"), y=+p[0], m=+p[1];
+    $("fDesde").value = y+"-"+pad(m)+"-01";
+    $("fHasta").value = ymd(new Date(y, m, 0));
+  }
+  function scopeIds(mes){
+    if($("fAlcance").value==="todos" || !mes) return null;
+    var c = CFG.meses && CFG.meses[mes];
+    var ids = c && c.materiales ? c.materiales.map(function(m){ return +m.id; }) : [];
+    return ids.length ? new Set(ids) : null;
+  }
+  function matLabel(id){
+    var m = DATA.mats[id]; if(!m) return String(id);
+    var dup = Object.keys(DATA.mats).some(function(k){ return +k!==+id && DATA.mats[k].name===m.name; });
+    return m.name + (dup ? " ("+id+")" : "");
+  }
+
+  function filtered(){
+    var mes=$("fMes").value, zona=$("fZona").value;
+    var d1=$("fDesde").value ? new Date($("fDesde").value+"T00:00:00") : null;
+    var d2=$("fHasta").value ? new Date($("fHasta").value+"T23:59:59") : null;
+    var scope = scopeIds(mes);
+    function okBase(r){
+      if(d1 && r.fecha<d1) return false;
+      if(d2 && r.fecha>d2) return false;
+      if(zona && r.zona!==zona) return false;
+      if(sel.cad && !sel.cad.has(r.cadena)) return false;
+      return true;
+    }
+    var recs = DATA.recs.filter(function(r){
+      if(!okBase(r)) return false;
+      if(scope && !scope.has(r.mat)) return false;
+      if(sel.mat && !sel.mat.has(String(r.mat))) return false;
+      return true;
+    });
+    var info = INFO ? INFO.recs.filter(okBase) : null;
+    return { recs:recs, info:info, scope:scope };
+  }
+
+  /* ───────── render ───────── */
+  function cssv(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function pct(a,b){ return b ? Math.round(a*1000/b)/10 : 0; }
+  function kpi(l,v,s){ return '<div class="kpi"><div class="k-label">'+esc(l)+'</div><div class="k-value mono">'+esc(v)+'</div><div class="k-sub">'+esc(s)+'</div></div>'; }
+  function top3(map, fmt){ return Object.keys(map).sort(function(a,b){return map[b]-map[a];}).slice(0,3).map(fmt).join(", "); }
+  function tableMotivos(groups, extra, heads, total){
+    var keys = Object.keys(groups).sort(function(a,b){ return groups[b].n-groups[a].n; });
+    if(!keys.length) return '<div class="empty">Sin registros con los filtros actuales.</div>';
+    return '<table><thead><tr><th>Motivo</th><th class="num">#</th><th class="num">%</th><th>'+heads[0]+'</th><th>'+heads[1]+'</th></tr></thead><tbody>'+
+      keys.map(function(k){ var g=groups[k], e=extra(g);
+        return '<tr><td>'+esc(k)+'</td><td class="num mono">'+g.n+'</td><td class="num mono">'+pct(g.n,total).toFixed(1)+'%</td><td>'+esc(e[0])+'</td><td>'+esc(e[1])+'</td></tr>'; }).join("")+
+      '</tbody></table>';
+  }
+  function ejemplos(map){ return Object.keys(map).sort(function(a,b){return map[b]-map[a];}).slice(0,2).map(function(t){ return "“"+t+"”"; }).join(" · "); }
+
+  var view = "graf", lastList = [], sortKey = "total", sortDir = -1, lastRecs = [];
+
+  /* ───────── detalle por tienda y material (con foto) y apartado "sin foto" ───────── */
+  function detRows(){
+    var est=$("dEstado").value, fo=$("dFoto").value, q=norm($("dBuscar").value);
+    return lastRecs.filter(function(r){
+      if(est==="noimpl" && r.impl!==0) return false;
+      if(est==="impl" && r.impl!==1) return false;
+      if(fo==="con" && !r.foto) return false;
+      if(fo==="sin" && r.foto) return false;
+      if(q && norm([r.store,r.tienda,r.promotor,r.cadena,r.distrito].join(" ")).indexOf(q)===-1) return false;
+      return true;
+    }).sort(function(a,b){ return b.fecha-a.fecha; });
+  }
+  function recExcel(rows){
+    return rows.map(function(r){ return {FECHA:ymd(r.fecha), STORE_ID:r.store, TIENDA:r.tienda, CADENA:r.cadena, ZONA:r.zona, DISTRITO:r.distrito, PROMOTOR:r.promotor,
+      MATERIAL:matLabel(r.mat), ID_MATERIAL:r.mat, ESTADO:r.impl===1?"Implementado":"No implementado", TIPO:r.tipo, MOTIVO:r.com, FOTO:r.foto||"SIN FOTO"}; });
+  }
+  function downloadRows(rows, name){
+    if(!rows.length){ setStatus("No hay filas para descargar con los filtros actuales.","err"); return; }
+    var wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(recExcel(rows)),"DETALLE"); XLSX.writeFile(wb,name);
+  }
+  function renderDetalle(){
+    var det=detRows(), MAX=500;
+    $("detSub").textContent = det.length.toLocaleString("es-PE")+" registros"+(det.length>MAX?" (se muestran los "+MAX+" más recientes; el Excel baja todos)":"");
+    $("tblDetalle").innerHTML = det.length ? '<table><thead><tr><th>Fecha</th><th>Tienda</th><th>Cadena</th><th>Zona</th><th>Promotor</th><th>Material</th><th>Estado</th><th>Tipo / motivo</th><th>Foto</th></tr></thead><tbody>'+
+      det.slice(0,MAX).map(function(r){
+        var st = r.impl===1 ? '<span class="pill ok">Implementado</span>' : '<span class="pill crit">No impl.</span>';
+        var ft = r.foto ? '<a href="'+esc(r.foto)+'" target="_blank" rel="noopener" title="Abrir foto">📷</a>' : (r.impl===1?'<span class="pill warn">Sin foto</span>':'');
+        return '<tr><td class="mono">'+ymd(r.fecha)+'</td><td>'+esc(r.tienda||r.store)+'</td><td>'+esc(r.cadena)+'</td><td>'+esc(r.zona)+'</td><td>'+esc(r.promotor)+'</td><td>'+esc(matLabel(r.mat))+'</td><td>'+st+'</td><td>'+esc(r.impl===1?(r.tipo||"—"):(r.com||"—"))+'</td><td>'+ft+'</td></tr>'; }).join("")+'</tbody></table>'
+      : '<div class="empty">Sin registros con ese filtro.</div>';
+    reportHeight();
+  }
+  function renderSinFoto(){
+    var by={}; lastRecs.forEach(function(r){ if(r.impl!==1) return; var g=by[r.mat]||(by[r.mat]={n:0,sin:0,stores:{}}); g.n++; if(!r.foto){ g.sin++; g.stores[r.store]=1; } });
+    var ids=Object.keys(by).sort(function(a,b){ return by[b].sin-by[a].sin; });
+    var tot=ids.reduce(function(a,k){ a.n+=by[k].n; a.s+=by[k].sin; return a; },{n:0,s:0});
+    $("tblSinFoto").innerHTML = !ids.length ? '<div class="empty">Sin implementaciones en el periodo.</div>' :
+      '<table><thead><tr><th>Material</th><th class="num">Implementaciones</th><th class="num">Con foto</th><th class="num">Sin foto</th><th class="num">% sin foto</th><th class="num">Tiendas sin foto</th></tr></thead><tbody>'+
+      ids.map(function(k){ var g=by[k]; var p=pct(g.sin,g.n);
+        return '<tr><td>'+esc(matLabel(k))+'</td><td class="num mono">'+g.n+'</td><td class="num mono">'+(g.n-g.sin)+'</td><td class="num mono">'+g.sin+'</td><td class="num mono"><span class="pill '+(p>=30?'crit':p>=10?'warn':'ok')+'">'+p.toFixed(1)+'%</span></td><td class="num mono">'+Object.keys(g.stores).length+'</td></tr>'; }).join("")+
+      '<tr><td><b>Total</b></td><td class="num mono"><b>'+tot.n+'</b></td><td class="num mono"><b>'+(tot.n-tot.s)+'</b></td><td class="num mono"><b>'+tot.s+'</b></td><td class="num mono"><b>'+pct(tot.s,tot.n).toFixed(1)+'%</b></td><td></td></tr></tbody></table>';
+  }
+  function applyView(){
+    $("pies").hidden = view!=="graf";
+    $("tblAvance").hidden = view!=="tabla";
+    [].forEach.call($("viewSeg").querySelectorAll("button"), function(b){ b.classList.toggle("on", b.getAttribute("data-v")===view); });
+    reportHeight();
+  }
+  function renderAvanceTable(){
+    var rows = lastList.map(function(m){
+      var pend = m.meta ? Math.max(0, m.meta-m.total) : 0;
+      return { id:m.id, nombre:matLabel(m.id), total:m.total, ok:m.ok, no:m.no, pct:m.total?m.ok/m.total:-1, meta:m.meta, pend:pend, avance:m.meta?m.ok/m.meta:-1,
+        fok:m.fok, fno:m.fno, fpct:(m.fok+m.fno)?m.fok/(m.fok+m.fno):-1,
+        tipos:Object.keys(m.tipos).map(function(t){ return t+": "+m.tipos[t]; }).join(" · ") };
+    });
+    rows.sort(function(a,b){
+      var x=a[sortKey], y=b[sortKey];
+      if(typeof x==="string") return sortDir*x.localeCompare(y);
+      return sortDir*(x-y) || a.nombre.localeCompare(b.nombre);
+    });
+    var cols = [["nombre","Material",0],["meta","Universo",1],["total","Visitadas",1],["ok","Implementadas",1],["no","No impl.",1],["pend","Pendientes",1],["avance","Avance vs universo",1],["pct","Efectividad en visitadas",1],["fpct","📷 Con foto",1],["tipos","Tipo de implementación",0]];
+    var tot = rows.reduce(function(a,r){ a.t+=r.total; a.o+=r.ok; a.n+=r.no; a.u+=r.meta; a.p+=r.pend; a.fo+=r.fok; a.fn+=r.fno; return a; },{t:0,o:0,n:0,u:0,p:0,fo:0,fn:0});
+    $("tblAvance").innerHTML = !rows.length ? '<div class="empty">No hay registros con los filtros actuales.</div>' :
+      '<table><thead><tr>'+cols.map(function(c){
+        return '<th class="sortable'+(c[2]?' num':'')+'" data-k="'+c[0]+'">'+c[1]+(sortKey===c[0]?(sortDir<0?" ▾":" ▴"):"")+'</th>'; }).join("")+'</tr></thead><tbody>'+
+      rows.map(function(r){
+        var p = r.pct<0 ? "—" : (r.pct*100).toFixed(1)+"%";
+        var av = r.avance<0 ? "—" : (r.avance*100).toFixed(1)+"%";
+        return '<tr><td>'+esc(r.nombre)+'</td><td class="num mono">'+(r.meta||"—")+'</td><td class="num mono">'+r.total+'</td><td class="num mono">'+r.ok+'</td><td class="num mono">'+r.no+
+          '</td><td class="num mono">'+(r.meta?r.pend:"—")+'</td><td class="num mono">'+(r.avance<0?"":'<span class="bar" style="width:'+Math.round(r.avance*60)+'px"></span>')+av+
+          '</td><td class="num mono">'+p+'</td><td class="num mono" title="Implementaciones con link de foto / total de implementaciones">'+(r.fpct<0?"—":(r.fpct*100).toFixed(0)+'% <span style="color:var(--text-muted);font-size:11px">'+r.fok+'/'+(r.fok+r.fno)+'</span>')+'</td><td>'+esc(r.tipos||"—")+'</td></tr>'; }).join("")+
+      '<tr><td><b>Total</b></td><td class="num mono"><b>'+tot.u+'</b></td><td class="num mono"><b>'+tot.t+'</b></td><td class="num mono"><b>'+tot.o+'</b></td><td class="num mono"><b>'+tot.n+
+      '</b></td><td class="num mono"><b>'+tot.p+'</b></td><td class="num mono"><b>'+(tot.u?pct(tot.o,tot.u).toFixed(1)+"%":"—")+'</b></td><td class="num mono"><b>'+(tot.t?pct(tot.o,tot.t).toFixed(1)+"%":"—")+'</b></td><td class="num mono"><b>'+((tot.fo+tot.fn)?Math.round(tot.fo*100/(tot.fo+tot.fn))+"%":"—")+'</b></td><td></td></tr></tbody></table>';
+    [].forEach.call($("tblAvance").querySelectorAll("th.sortable"), function(th){
+      th.addEventListener("click", function(){
+        var k=th.getAttribute("data-k"); if(sortKey===k) sortDir=-sortDir; else { sortKey=k; sortDir = (k==="nombre"||k==="tipos")?1:-1; }
+        renderAvanceTable();
+      });
+    });
+  }
+
+  function render(){
+    if(!DATA) return;
+    var f = filtered(), recs = f.recs;
+    var byMat = {};
+    recs.forEach(function(r){
+      var m = byMat[r.mat] || (byMat[r.mat] = {id:r.mat, stores:{}, tipos:{}, fok:0, fno:0});
+      var s = m.stores[r.store] || (m.stores[r.store] = {impl:false});
+      if(r.impl===1){ s.impl=true; var t=r.tipo||"Sin tipo"; m.tipos[t]=(m.tipos[t]||0)+1; if(r.foto) m.fok++; else m.fno++; }
+    });
+    var mesKey = $("fMes").value, cfgMes = CFG.meses && CFG.meses[mesKey];
+    var metaOf = {}; if(cfgMes && cfgMes.materiales) cfgMes.materiales.forEach(function(m){ if(m.meta) metaOf[+m.id]=+m.meta; });
+    if(f.scope) f.scope.forEach(function(id){ if(!byMat[id] && DATA.mats[id]) byMat[id]={id:id,stores:{},tipos:{}}; });
+    // Universo estimado = tiendas distintas del archivo (todas las fechas) que cumplen cadena y zona. La meta del
+    // config (tiendas objetivo del material) tiene prioridad cuando no hay filtro de cadena/zona.
+    var zonaSel = $("fZona").value, uniSet = {};
+    DATA.recs.forEach(function(r){ if(zonaSel && r.zona!==zonaSel) return; if(sel.cad && !sel.cad.has(r.cadena)) return; uniSet[r.store]=1; });
+    var universo = Object.keys(uniSet).length, filtrado = !!(zonaSel || sel.cad);
+    var list = Object.keys(byMat).map(function(k){
+      var m=byMat[k], st=Object.keys(m.stores), ok=st.filter(function(s){return m.stores[s].impl;}).length;
+      var cfgMeta = (!filtrado && metaOf[m.id]) ? metaOf[m.id] : 0;
+      return {id:m.id, total:st.length, ok:ok, no:st.length-ok, tipos:m.tipos, meta:cfgMeta||universo, metaEst:!cfgMeta, fok:m.fok||0, fno:m.fno||0};
+    }).sort(function(a,b){ return b.total-a.total || matLabel(a.id).localeCompare(matLabel(b.id)); });
+
+    var storesAll = {}, vis = {}, pairs=0, pairsOk=0;
+    recs.forEach(function(r){ storesAll[r.store]=1; vis[r.store+"|"+ymd(r.fecha)]=1; });
+    var uniTot=0; list.forEach(function(m){ pairs+=m.total; pairsOk+=m.ok; uniTot+=m.meta; });
+    $("kpis").innerHTML =
+      kpi("Visitas con material", Object.keys(vis).length.toLocaleString("es-PE"), "tienda × día") +
+      kpi("Tiendas", Object.keys(storesAll).length.toLocaleString("es-PE"), "únicas en el periodo") +
+      kpi("Materiales", list.filter(function(m){return m.total>0;}).length+" / "+list.length, "con registros / en alcance") +
+      kpi("Avance vs universo", uniTot? pct(pairsOk,uniTot).toFixed(1)+"%" : "—", pairsOk.toLocaleString("es-PE")+" de "+uniTot.toLocaleString("es-PE")+" tienda×material (universo estimado o meta)") +
+      kpi("Efectividad", pairs? pct(pairsOk,pairs).toFixed(1)+"%" : "—", "de lo ya visitado: "+pairsOk.toLocaleString("es-PE")+" de "+pairs.toLocaleString("es-PE")) +
+      kpi("No implementados", (pairs-pairsOk).toLocaleString("es-PE"), "tienda×material");
+
+    charts.forEach(function(c){ try{c.destroy();}catch(e){} }); charts=[];
+    var host=$("pies");
+    if(!list.length){ host.innerHTML='<div class="empty">No hay registros con los filtros actuales.</div>'; }
+    else {
+      host.innerHTML = list.map(function(m,i){
+        var tipos = Object.keys(m.tipos).map(function(t){ return '<span class="chip">'+esc(t)+': '+m.tipos[t]+'</span>'; }).join("");
+        var pend = m.meta ? Math.max(0, m.meta-m.total) : 0;
+        return '<div class="pie-card"><h3>'+esc(matLabel(m.id))+'<small>Avance '+pct(m.ok,m.meta).toFixed(1)+'% · '+m.ok+' de '+m.meta+(m.metaEst?' tiendas (universo estimado)':' (meta)')+'<br>Efectividad en visitadas: '+(m.total? pct(m.ok,m.total).toFixed(1)+"%" : "—")+'</small></h3>'+
+          '<div class="pie-wrap"><canvas id="pie'+i+'"></canvas></div>'+
+          '<div class="legend-row"><span><i class="dot" style="background:var(--ok)"></i>Implementadas '+m.ok+'</span>'+
+          '<span><i class="dot" style="background:var(--crit)"></i>No impl. '+m.no+'</span>'+
+          (pend?'<span><i class="dot" style="background:var(--pend)"></i>Pendientes '+pend+'</span>':'')+'</div>'+
+          (tipos?'<div class="chips">'+tipos+'</div>':'')+'</div>';
+      }).join("");
+      var ok=cssv("--ok"), crit=cssv("--crit"), pendc=cssv("--pend"), border=cssv("--surface");
+      list.forEach(function(m,i){
+        var pend = m.meta ? Math.max(0, m.meta-m.total) : 0;
+        var vals=[m.ok,m.no], cols=[ok,crit], labs=["Implementadas","No implementadas"];
+        if(pend){ vals.push(pend); cols.push(pendc); labs.push("Pendientes"); }
+        if(!m.total && !pend){ vals=[1]; cols=[pendc]; labs=["Sin registros"]; }
+        var cv=$("pie"+i); if(!cv) return;
+        charts.push(new Chart(cv,{type:"pie",data:{labels:labs,datasets:[{data:vals,backgroundColor:cols,borderColor:border,borderWidth:2}]},
+          options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},animation:false}}));
+      });
+    }
+
+    lastList = list;
+    renderAvanceTable();
+    applyView();
+
+    var noImpl = recs.filter(function(r){ return r.impl===0; });
+    var gm = {};
+    noImpl.forEach(function(r){
+      var c = categoria(r.com), g = gm[c] || (gm[c]={n:0, mats:{}, ej:{}});
+      g.n++; g.mats[r.mat]=(g.mats[r.mat]||0)+1; if(r.com) g.ej[r.com]=(g.ej[r.com]||0)+1;
+    });
+    $("tblMotivos").innerHTML = tableMotivos(gm, function(g){
+      return [ top3(g.mats, function(id){ return matLabel(id)+" ("+g.mats[id]+")"; }), ejemplos(g.ej) ];
+    }, ["Materiales afectados","Ejemplos"], noImpl.length);
+
+    if(f.info){
+      var gc={};
+      f.info.forEach(function(r){ var c=categoria(r.motivo), g=gc[c]||(gc[c]={n:0,cad:{},ej:{}}); g.n++; g.cad[r.cadena]=(g.cad[r.cadena]||0)+1; if(r.motivo) g.ej[r.motivo]=(g.ej[r.motivo]||0)+1; });
+      $("tblCobertura").innerHTML = tableMotivos(gc, function(g){
+        return [ top3(g.cad, function(c){ return c+" ("+g.cad[c]+")"; }), ejemplos(g.ej) ];
+      }, ["Cadenas","Ejemplos"], f.info.length);
+    } else {
+      $("tblCobertura").innerHTML = '<div class="empty">Carga el Excel <b>582-INFORMACIÓN GENERAL</b> (botón de arriba o conexión con SharePoint) para ver los motivos de no cobertura.</div>';
+    }
+
+    lastRecs = recs;
+    renderDetalle();
+    renderSinFoto();
+
+    var scopeTxt = f.scope ? "Mostrando los "+f.scope.size+" materiales configurados para "+mesLabel(mesKey)+"." :
+      (mesKey && $("fAlcance").value==="mes" ? "No hay materiales configurados para "+mesLabel(mesKey)+" en config/materiales.json: se muestran todos los que tienen registros." : "Mostrando todos los materiales.");
+    $("filterHint").textContent = scopeTxt + " Zona derivada: LIMA = región Lima/Callao; fuera de Lima, KC = cuenta KACC y NKC = resto.";
+    reportHeight();
+  }
+
+  /* ───────── carga de datos ───────── */
+  function refreshControls(keepFilters){
+    var meses = monthsAvail(), cur=$("fMes").value;
+    $("fMes").innerHTML = '<option value="">Todo el periodo</option>' + meses.map(function(k){ return '<option value="'+k+'">'+mesLabel(k)+'</option>'; }).join("");
+    var withData = {}; DATA.recs.forEach(function(r){ withData[r.mes]=1; });
+    var def = meses.filter(function(k){ return withData[k]; })[0] || meses[0] || "";
+    var keep = cur && meses.indexOf(cur)!==-1;
+    $("fMes").value = keep ? cur : def;
+    if(!keep) setMonthDates($("fMes").value);
+    var mats = Object.keys(DATA.mats).map(Number).sort(function(a,b){ return a-b; });
+    if(keepFilters) return;   // recarga automática: no tocar los filtros de material/cadena que eligió el usuario
+    msMat.set(mats.map(function(id){ return {v:id,t:matLabel(id)+" · id "+id}; })); sel.mat=null;
+    var cads = {}; DATA.recs.forEach(function(r){ cads[r.cadena]=1; });
+    msCad.set(Object.keys(cads).sort().map(function(c){ return {v:c,t:c}; })); sel.cad=null;
+  }
+  function setStatus(msg, cls){ var s=$("statusLine"); s.textContent=msg; s.className="status-line"+(cls?" "+cls:""); }
+  /* "Datos al": hora de modificación de cada archivo + última vez que se revisó */
+  var MOD={pop:null,info:null}, CHK=null, autoMode=false;
+  function fmtHM(d){ try{ return new Date(d).toLocaleString("es-PE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false}); }catch(e){ return ""; } }
+  function showMod(){
+    var parts=[];
+    if(MOD.pop) parts.push("Ejecución POP: datos al "+fmtHM(MOD.pop));
+    if(MOD.info) parts.push("Información General: "+fmtHM(MOD.info));
+    if(CHK) parts.push("revisado "+new Date(CHK).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit",hour12:false}));
+    $("modLine").textContent=parts.join(" · ");
+  }
+  function applyWb(wb, kind, label){
+    if(kind==="pop"){
+      var p = parsePop(wb); if(p.error){ setStatus("⚠ "+p.error,"err"); return false; }
+      DATA = p; MOD.pop = wb.__mod||null; CHK = new Date(); showMod();
+      $("emptyBanner").hidden=true; $("app").hidden=false; $("fileName").textContent = label;
+      refreshControls(autoMode); render();
+      setStatus("✓ "+Object.keys(p.mats).length+" materiales · "+p.recs.length.toLocaleString("es-PE")+" registros · "+p.visitas.toLocaleString("es-PE")+" visitas","ok");
+      return true;
+    }
+    var i = parseInfo(wb); if(i.error){ setStatus("⚠ "+i.error,"err"); return false; }
+    INFO = i; MOD.info = wb.__mod||null; showMod(); if(DATA) render();
+    setStatus("✓ Información General: "+i.recs.length.toLocaleString("es-PE")+" visitas no efectivas","ok");
+    return true;
+  }
+  function readFile(file, kind){
+    setStatus("Leyendo "+file.name+"…");
+    return file.arrayBuffer().then(function(buf){
+      var wb = XLSX.read(buf,{type:"array",cellDates:true}); wb.__mod = new Date(file.lastModified);
+      applyWb(wb, kind, file.name);
+    }).catch(function(e){ setStatus("⚠ No se pudo leer el archivo: "+e.message,"err"); });
+  }
+  $("fileInput").addEventListener("change", function(e){ if(e.target.files[0]) readFile(e.target.files[0],"pop"); e.target.value=""; });
+  $("infoInput").addEventListener("change", function(e){ if(e.target.files[0]) readFile(e.target.files[0],"info"); e.target.value=""; });
+
+  /* ───────── SharePoint (Graph + MSAL) ───────── */
+  var MS = window.MAT_MS || {}, msalApp=null, msBusy=false;
+  function b64url(s){ return btoa(unescape(encodeURIComponent(s))).replace(/=+$/,"").replace(/\+/g,"-").replace(/\//g,"_"); }
+  function msToken(interactive){
+    var req = { scopes: MS.scopes || ["Files.Read.All"] }, acc = msalApp.getAllAccounts()[0];
+    if(acc){ req.account=acc;
+      return msalApp.acquireTokenSilent(req).then(function(r){return r.accessToken;}).catch(function(){
+        if(!interactive) return Promise.reject(new Error("silent-failed"));
+        return msalApp.acquireTokenPopup(req).then(function(r){return r.accessToken;}); }); }
+    if(!interactive) return Promise.reject(new Error("no-account"));
+    return msalApp.loginPopup(req).then(function(r){ if(r.account) $("msUser").textContent=r.account.username; return r.accessToken; });
+  }
+  function fetchBook(token, url){
+    var base="https://graph.microsoft.com/v1.0/shares/u!"+b64url(url)+"/driveItem", opt={headers:{Authorization:"Bearer "+token}};
+    var meta=fetch(base+"?$select=lastModifiedDateTime",opt).then(function(r){ return r.ok?r.json():null; }).catch(function(){ return null; });
+    return fetch(base+"/content",opt)
+      .then(function(res){ if(!res.ok) throw new Error("Graph HTTP "+res.status); return res.arrayBuffer(); })
+      .then(function(buf){ var wb=XLSX.read(buf,{type:"array",cellDates:true});
+        return meta.then(function(m){ if(m && m.lastModifiedDateTime) wb.__mod=new Date(m.lastModifiedDateTime); return wb; }); });
+  }
+  // recarga automática cada 10 min mientras la pestaña esté visible (conserva los filtros elegidos)
+  var autoTimer=null;
+  function startAuto(){
+    if(autoTimer) return;
+    autoTimer=setInterval(function(){
+      if(document.hidden || msBusy || !msalApp) return;
+      msBusy=true; autoMode=true;
+      msToken(false).then(function(t){
+        return fetchBook(t, MS.popUrl).then(function(wb){ applyWb(wb,"pop","SharePoint · 582-EJECUCIÓN-POP (en vivo)"); })
+          .then(function(){ return fetchBook(t, MS.infoUrl).then(function(wb2){ applyWb(wb2,"info",""); }).catch(function(){}); });
+      }).catch(function(){}).finally(function(){ msBusy=false; autoMode=false; });
+    }, 10*60*1000);
+  }
+  function msError(err, silent){
+    var msg=(err&&err.message)||String(err);
+    if(silent && (msg==="no-account"||msg==="silent-failed")) return;
+    var t;
+    if(msg.indexOf("interaction_in_progress")!==-1) t="Login en curso o interrumpido. Recarga la página (F5) e intenta de nuevo.";
+    else if(msg.indexOf("popup")!==-1) t="El navegador bloqueó la ventana de inicio de sesión. Permite ventanas emergentes para bat360.vercel.app.";
+    else if(msg.indexOf("AADSTS50011")!==-1||msg.indexOf("redirect_uri")!==-1) t="Falta registrar esta página como Redirect URI (SPA) en Entra: bat360 → Authentication → .../materiales.html. Mientras tanto usa la carga manual.";
+    else if(msg.indexOf("Graph HTTP 403")!==-1) t="Tu cuenta no tiene acceso al archivo (403). Pide que te lo compartan o muévelo a un sitio del equipo; mientras tanto usa la carga manual.";
+    else if(msg.indexOf("Graph HTTP 404")!==-1) t="No se encontró el archivo compartido (404). El link pudo cambiar.";
+    else t="No se pudo cargar desde SharePoint: "+msg;
+    setStatus("⚠ "+t,"err");
+  }
+  function loadLive(silent){
+    if(msBusy) return; msBusy=true;
+    if(!silent) setStatus("Conectando con SharePoint…");
+    msToken(!silent).then(function(token){
+      return fetchBook(token, MS.popUrl).then(function(wb){
+        if(!applyWb(wb,"pop","SharePoint · 582-EJECUCIÓN-POP (en vivo)")) return;
+        $("msRefreshBtn").hidden=false; startAuto();
+        return fetchBook(token, MS.infoUrl).then(function(wb2){
+          var base=$("statusLine").textContent;
+          if(applyWb(wb2,"info","")) setStatus(base+" · "+$("statusLine").textContent.replace("✓ ",""),"ok");
+        }).catch(function(e){
+          setStatus($("statusLine").textContent+" · Información General no disponible ("+((e&&e.message)||"error")+"): cárgala manualmente.","ok");
+        });
+      });
+    }).catch(function(e){ msError(e, silent); }).finally(function(){ msBusy=false; });
+  }
+  function initMs(){
+    var row=$("msRow");
+    if(!MS.clientId || typeof msal==="undefined"){ row.hidden=true; return; }
+    row.hidden=false;
+    msalApp = new msal.PublicClientApplication({
+      auth:{clientId:MS.clientId, authority:"https://login.microsoftonline.com/"+(MS.tenant||"organizations"), redirectUri:location.origin+location.pathname},
+      cache:{cacheLocation:"localStorage"} });
+    msalApp.initialize().then(function(){ return msalApp.handleRedirectPromise(); }).then(function(resp){
+      if(resp && resp.account) msalApp.setActiveAccount(resp.account);
+      var acc = msalApp.getActiveAccount() || msalApp.getAllAccounts()[0];
+      if(acc){ msalApp.setActiveAccount(acc); $("msUser").textContent=acc.username; loadLive(true); }
+    }).catch(function(e){ console.warn("MSAL init:", e&&e.message); });
+    $("msConnectBtn").addEventListener("click", function(){ loadLive(false); });
+    $("msRefreshBtn").addEventListener("click", function(){ loadLive(false); });
+  }
+
+  /* ───────── arranque ───────── */
+  msMat = msBuild($("msMat"),"Material", function(s){ sel.mat=s; render(); });
+  msCad = msBuild($("msCad"),"Cadena", function(s){ sel.cad=s; render(); });
+  ["dEstado","dFoto"].forEach(function(id){ $(id).addEventListener("change", renderDetalle); });
+  $("dBuscar").addEventListener("input", renderDetalle);
+  $("dDown").addEventListener("click", function(){ downloadRows(detRows(), "materiales-detalle.xlsx"); });
+  $("sfDown").addEventListener("click", function(){
+    downloadRows(lastRecs.filter(function(r){ return r.impl===1 && !r.foto; }).sort(function(a,b){ return b.fecha-a.fecha; }), "materiales-sin-foto.xlsx");
+  });
+  $("viewSeg").addEventListener("click", function(e){
+    var b = e.target.closest("button[data-v]"); if(!b) return;
+    view = b.getAttribute("data-v"); applyView();
+  });
+  $("fMes").addEventListener("change", function(){ setMonthDates($("fMes").value); render(); });
+  ["fAlcance","fZona","fDesde","fHasta"].forEach(function(id){ $(id).addEventListener("change", render); });
+
+  function loadCfg(){
+    return fetch("config/materiales.json?v="+Date.now()).then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function(j){ CFG = j || {meses:{}}; }).catch(function(){ CFG = {meses:{}}; });
+  }
+  window.__mat = { applyWb:applyWb };   // gancho para verificación local
+  loadCfg().then(initMs);
+
+  function reportHeight(){
+    try{ if(window.parent && window.parent!==window){
+      var h=Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
+      window.parent.postMessage({__materiales:"height",h:h},"*"); } }catch(e){}
+  }
+  if(window.ResizeObserver){ try{ new ResizeObserver(reportHeight).observe(document.documentElement); }catch(e){} }
+  window.addEventListener("load", reportHeight); window.addEventListener("resize", reportHeight);
+  setTimeout(reportHeight,300);
+})();
+</script>
+</body>
+</html>
