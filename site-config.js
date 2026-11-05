@@ -8,7 +8,9 @@ window.SITE = {
   googleClientId: '382427877987-j68n1tmm6ers3biekqamem2jlrdguubj.apps.googleusercontent.com',
   usuarios: {
     'ccamarena@ttaudit.com': { vistas: ['*'] },
-    'acastro@ttaudit.com':   { vistas: ['*'] }
+    'acastro@ttaudit.com':   { vistas: ['*'] },
+    'mmatallana@ttaudit.com': { vistas: ['*'] },
+    'marriaga@ttaudit.com':   { vistas: ['*'] }
   },
   // Supervisores que aparecen en el «Planning del supervisor» cuando la hoja «Calendario sup.» aún no tiene la semana (normalmente salen de la propia hoja).
   supervisores: ['GIAN', 'JUAN ROSAS'],
