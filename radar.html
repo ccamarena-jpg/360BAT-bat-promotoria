@@ -467,6 +467,7 @@ table.matrix-table thead th.sticky-col{ z-index:4; background:var(--surface-2); 
 
 <!-- Microsoft Authentication Library (para leer el Excel en vivo desde SharePoint) -->
 <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+<script src="shared.js"></script>
 <script>
 /* ═══════ CONFIG conexión en vivo con SharePoint (Microsoft Graph) ═══════
    Pega aquí el Client ID de la app registrada en Entra (Azure AD).
@@ -1347,12 +1348,73 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
     });
   });
 
+  /* ═══════ Fuente: Información General + Padrón ═══════
+     Dentro de BAT 360 Promotoría el radar ya no depende del Excel de VALIDACIÓN: arma las mismas filas (tienda programada por
+     semana, ¿se visitó?, ¿fue efectiva?, motivo) cruzando el padrón (día y frecuencia Q1/Q2) con Información General.
+     La carga manual del Excel de VALIDACIÓN sigue disponible como alternativa. */
+  var USE_INFO = !!(window.BAT && BAT.links && BAT.links.padron && BAT.links.infoGeneral);
+  function cadenaCorta(estacion, cadena){ var m=/^([^\-–]{2,22}?)\s*[-–]/.exec(estacion||""); return String(m? m[1] : (cadena||"")).trim().toUpperCase(); }
+  function recordsFromInfo(pad, info){
+    var ti=pad.labels.length-1, today=new Date(); today.setHours(0,0,0,0);
+    var minD=null; info.visits.forEach(function(v){ if(!minD || v.fecha<minD) minD=v.fecha; });
+    if(!minD) return [];
+    var recs=[];
+    for(var mon=BAT.mondayOf(minD); mon<=today; mon=BAT.addDays(mon,7)){
+      var dom=BAT.addDays(mon,6);
+      BAT.programacion(pad.rows, ti, mon).forEach(function(p){
+        if(p.fecha>=today || p.fecha<minD) return;          // solo lo ya vencido y con datos disponibles
+        var vs=(info.byStore[p.r.store]||[]).filter(function(v){ return v.fecha>=mon && v.fecha<=dom; });
+        var prom=norm(p.promotor); if(ALIAS[prom]) prom=ALIAS[prom];
+        var efec=vs.some(function(v){ return v.efectiva; });
+        var motivo=""; if(vs.length && !efec){ var vm=vs.filter(function(v){ return v.motivo; })[0]; motivo=vm? vm.motivo : ""; }
+        recs.push({ cod:String(p.r.store), cadena:cadenaCorta(p.r.estacion,p.r.cadena), estacion:p.r.estacion, distrito:p.r.distrito, provincia:p.r.provincia,
+          promotor:prom, diaRuteado:BAT.DIAS_T[p.di], frecuencia:p.frec, fecha:p.fecha, cobertura:vs.length>0, efectividad:efec, comentario:motivo });
+      });
+    }
+    return recs;
+  }
+  var infoBusy=false;
+  function loadFromInfo(silent){
+    var status=document.getElementById("statusLine");
+    if(infoBusy) return; infoBusy=true;
+    if(!silent){ status.textContent="Conectando con SharePoint…"; status.className="status-line"; }
+    BAT.auth.token(!silent).then(function(token){
+      status.textContent="Descargando padrón e Información General…"; status.className="status-line";
+      return Promise.all([
+        BAT.fetchParsed(token,BAT.links.padron,{prefer:/^BBDD/i,kind:"pad",parse:BAT.parsePadron}),
+        BAT.fetchParsed(token,BAT.links.infoGeneral,{prefer:"Consulta1",kind:"info",parse:BAT.parseInfo}) ]);
+    }).then(function(r){
+      var pad=r[0].data, info=r[1].data;
+      if(pad.error) throw new Error(pad.error); if(info.error) throw new Error(info.error);
+      var recs=recordsFromInfo(pad,info);
+      document.getElementById("fileName").textContent="SharePoint · Información General + Padrón";
+      onFileLoaded(recs);
+      var mr=document.getElementById("msRefreshBtn"); if(mr) mr.hidden=false;
+      if(!state.maxDate){ status.textContent="⚠ No se pudieron armar visitas programadas con estos archivos."; status.className="status-line err"; return; }
+      status.textContent="✓ "+recs.length.toLocaleString("es-PE")+" tiendas programadas · última fecha "+fmtDate(state.maxDate)+(r[1].mod?" · Información General al "+new Date(r[1].mod).toLocaleString("es-PE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false}):"");
+      status.className="status-line ok";
+    }).catch(function(err){
+      var msg=(err&&err.message)||String(err);
+      if(silent && (msg==="no-account"||msg==="silent-failed")) return;
+      status.textContent="⚠ "+BAT.errorText(err,"radar.html"); status.className="status-line err";
+    }).finally(function(){ infoBusy=false; });
+  }
+  function initInfoSource(){
+    var row=document.getElementById("msRow"), note=document.getElementById("msNote"); if(note) note.hidden=true; if(row) row.hidden=false;
+    document.querySelector(".brand p").innerHTML='Cobertura y efectividad por promotor, tiendas que llevan semanas sin cobertura y el motivo de cada visita no efectiva. Se arma solo con el <b>padrón</b> y <b>Información General</b> de SharePoint: pulsa «Conectar SharePoint».';
+    document.querySelector("#sampleBanner span:last-child").innerHTML="<strong>Mostrando datos de ejemplo.</strong> Conecta con SharePoint para ver tus promotores y tiendas reales, y activar los filtros.";
+    BAT.auth.init().then(function(acc){ if(acc){ document.getElementById("msUser").textContent=acc.username; loadFromInfo(true); } });
+    document.getElementById("msConnectBtn").addEventListener("click",function(){ loadFromInfo(false); });
+    document.getElementById("msRefreshBtn").addEventListener("click",function(){ loadFromInfo(false); });
+  }
+  window.__radarInfo = { recordsFromInfo:recordsFromInfo, onFileLoaded:onFileLoaded };   // gancho para verificación local
+
   loadCfg();
   populateFilterOptions();
   render(sampleResult(), true);
   renderMotivo(sampleMotivo(), true);
   setView("resumen");
-  initMs();
+  if(USE_INFO) initInfoSource(); else initMs();
 
   // ---------- auto-ajuste de altura dentro del iframe de BAT 360 ----------
   function reportHeight(){
