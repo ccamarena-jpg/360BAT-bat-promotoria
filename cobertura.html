@@ -844,13 +844,20 @@ window.COB_REF_Q1 = "2026-10-26";
     if(CHK) parts.push("revisado "+new Date(CHK).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit",hour12:false}));
     $("modLine").textContent=parts.join(" · ");
   }
+  /* Caché local de lo ya procesado (IndexedDB): si Información General no cambió en SharePoint, no se descarga ni se procesa de nuevo.
+     Subir PARSER_V cuando cambie la lógica de lectura, para invalidar lo guardado. */
+  var PARSER_V="1";
+  function idb(){ return new Promise(function(res,rej){ try{ var rq=indexedDB.open("bat360cache",1); rq.onupgradeneeded=function(){ rq.result.createObjectStore("kv"); }; rq.onsuccess=function(){ res(rq.result); }; rq.onerror=function(){ rej(rq.error); }; }catch(e){ rej(e); } }); }
+  function cacheGet(k){ return idb().then(function(db){ return new Promise(function(res){ var r=db.transaction("kv").objectStore("kv").get(k); r.onsuccess=function(){ res(r.result||null); }; r.onerror=function(){ res(null); }; }); }).catch(function(){ return null; }); }
+  function cachePut(k,v){ return idb().then(function(db){ return new Promise(function(res){ var tx=db.transaction("kv","readwrite"); tx.objectStore("kv").put(v,k); tx.oncomplete=function(){ res(true); }; tx.onerror=function(){ res(false); }; }); }).catch(function(){ return false; }); }
   function applyWb(wb,kind){
     if(kind==="pad"){
       var p=parsePadron(wb); if(p.error){ setStatus("⚠ "+p.error,"err"); return false; }
       PAD=p; MOD.pad=wb.__mod||null; updateNames(); show(); showMod();
       setStatus("✓ Padrón: "+p.rows.length.toLocaleString("es-PE")+" tiendas · columnas "+p.labels.join(", "),"ok"); return true;
     }
-    var i=parseInfo(wb); if(i.error){ setStatus("⚠ "+i.error,"err"); return false; }
+    var i=wb.__cached || parseInfo(wb); if(i.error){ setStatus("⚠ "+i.error,"err"); return false; }
+    if(wb.__ckey && !wb.__cached) cachePut(wb.__ckey.key,{mod:wb.__ckey.mod,data:i});
     INFO=i; MOD.info=wb.__mod||null; CHK=new Date(); showMod();
     updateNames(); if(PAD){ refreshControls(true); render(); }
     setStatus("✓ Información General: "+i.visits.length.toLocaleString("es-PE")+" visitas"+(PAD?"":" (falta el padrón)"),"ok"); return true;
@@ -879,16 +886,19 @@ window.COB_REF_Q1 = "2026-10-26";
     return msalApp.loginPopup(req).then(function(r){ if(r.account) $("msUser").textContent=r.account.username; return r.accessToken; });
   }
   // prefer: hoja a procesar (el resto del libro no se parsea). knownMod: si el archivo no cambió desde esa fecha, no se descarga (devuelve null)
-  function fetchBook(token,url,prefer,knownMod){
+  // kind ("info"): activa la caché local; si ya hay una copia procesada con la misma fecha de modificación se devuelve {__mod, __cached} sin descargar
+  function fetchBook(token,url,prefer,knownMod,kind){
     var base="https://graph.microsoft.com/v1.0/shares/u!"+b64url(url)+"/driveItem", opt={headers:{Authorization:"Bearer "+token}};
-    var meta=fetch(base+"?$select=lastModifiedDateTime",opt).then(function(r){ return r.ok?r.json():null; }).catch(function(){ return null; });
-    var start = knownMod ? meta.then(function(m){ return (m && m.lastModifiedDateTime && new Date(m.lastModifiedDateTime).getTime()===new Date(knownMod).getTime()) ? "SAME" : null; }) : Promise.resolve(null);
-    return start.then(function(same){
-      if(same==="SAME") return null;
-      return fetch(base+"/content",opt)
-        .then(function(r){ if(!r.ok) throw new Error("Graph HTTP "+r.status); return r.arrayBuffer(); })
-        .then(function(b){ var wb=readBook(b,prefer);
-          return meta.then(function(m){ if(m && m.lastModifiedDateTime) wb.__mod=new Date(m.lastModifiedDateTime); return wb; }); });
+    return fetch(base+"?$select=lastModifiedDateTime",opt).then(function(r){ return r.ok?r.json():null; }).catch(function(){ return null; }).then(function(m){
+      var modIso = m && m.lastModifiedDateTime || null;
+      if(knownMod && modIso && new Date(modIso).getTime()===new Date(knownMod).getTime()) return null;
+      var ckey = kind && modIso ? kind+"|"+url+"|"+(HIST_CUT?ymd(HIST_CUT):"all")+"|"+PARSER_V : null;
+      return (ckey? cacheGet(ckey) : Promise.resolve(null)).then(function(c){
+        if(c && c.mod===modIso && c.data) return {__mod:new Date(modIso), __cached:c.data};
+        return fetch(base+"/content",opt)
+          .then(function(r){ if(!r.ok) throw new Error("Graph HTTP "+r.status); return r.arrayBuffer(); })
+          .then(function(b){ var wb=readBook(b,prefer); if(modIso){ wb.__mod=new Date(modIso); if(ckey) wb.__ckey={key:ckey,mod:modIso}; } return wb; });
+      });
     });
   }
   // recarga automática de Información General cada 10 min mientras la pestaña esté visible
@@ -898,7 +908,7 @@ window.COB_REF_Q1 = "2026-10-26";
     autoTimer=setInterval(function(){
       if(document.hidden || busy || !msalApp) return;
       busy=true;
-      msToken(false).then(function(t){ return fetchBook(t,MS.infoUrl,"Consulta1",MOD.info).then(function(wb){
+      msToken(false).then(function(t){ return fetchBook(t,MS.infoUrl,"Consulta1",MOD.info,"info").then(function(wb){
           if(wb) applyWb(wb,"info"); else { CHK=new Date(); showMod(); }   // sin cambios en SharePoint: no se vuelve a descargar
           return loadMotivosRemote(t); }); })
         .catch(function(){}).finally(function(){ busy=false; });
@@ -918,7 +928,7 @@ window.COB_REF_Q1 = "2026-10-26";
     if(busy) return; busy=true; if(!silent) setStatus("Conectando con SharePoint…");
     msToken(!silent).then(function(token){
       setStatus("Descargando datos de SharePoint…");
-      var infoP=fetchBook(token,MS.infoUrl,"Consulta1"); infoP.catch(function(){});   // se descarga en paralelo al padrón
+      var infoP=fetchBook(token,MS.infoUrl,"Consulta1",null,"info"); infoP.catch(function(){});   // se descarga en paralelo al padrón
       return fetchBook(token,MS.padUrl).then(function(wb){ if(!applyWb(wb,"pad")) return; $("msRefreshBtn").hidden=false; startAuto();
         setStatus("✓ Padrón cargado · procesando Información General…","ok");
         return infoP.then(function(wb2){ var base=$("statusLine").textContent; if(applyWb(wb2,"info")) setStatus(base+" · "+$("statusLine").textContent.replace("✓ ",""),"ok"); loadMotivosRemote(token); })
@@ -937,7 +947,7 @@ window.COB_REF_Q1 = "2026-10-26";
     $("msConnectBtn").addEventListener("click",function(){ loadLive(false); });
     $("msRefreshBtn").addEventListener("click",function(){ loadLive(false); });
   }
-  window.__cob={applyWb:applyWb, setWriteToken:function(f){ getWriteToken=f; }, setTarget:function(u){ MS.infoUrl=MS.infoUrl||"x"; motTarget=u; }, state:function(){ return {MOT:MOT,DIRTY:DIRTY}; }};   // gancho para verificación local
+  window.__cob={applyWb:applyWb, fetchBook:fetchBook, setWriteToken:function(f){ getWriteToken=f; }, setTarget:function(u){ MS.infoUrl=MS.infoUrl||"x"; motTarget=u; }, state:function(){ return {MOT:MOT,DIRTY:DIRTY}; }};   // gancho para verificación local
   initMs();
 
   function reportHeight(){
