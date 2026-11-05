@@ -10,6 +10,8 @@ window.SITE = {
     'ccamarena@ttaudit.com': { vistas: ['*'] },
     'acastro@ttaudit.com':   { vistas: ['*'] }
   },
+  // Historial que procesan Materiales y Cobertura: solo los últimos N meses (incluido el actual). 0 = todo el archivo.
+  historialMeses: 3,
   // Todos los links de SharePoint que usa el sitio, en un solo lugar. Las páginas (radar, materiales, cobertura)
   // los toman de aquí; si un archivo cambia de link, se actualiza solo esta línea.
   links: {

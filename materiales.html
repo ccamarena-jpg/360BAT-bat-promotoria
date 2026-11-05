@@ -286,7 +286,17 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
   }
 
   /* ───────── lectura: EJECUCIÓN-POP ───────── */
+  /* Historial: dentro de BAT 360 Promotoría solo se procesan los últimos N meses (site-config.js → historialMeses; 0 = todo) */
+  var HIST_MESES=0; try{ var Sx=window.parent!==window && window.parent.SITE; if(Sx && Sx.historialMeses) HIST_MESES=+Sx.historialMeses; }catch(e){}
+  var HIST_CUT=null; if(HIST_MESES>0){ var t0=new Date(); HIST_CUT=new Date(t0.getFullYear(), t0.getMonth()-(HIST_MESES-1), 1); }
+  /* Lee el Excel procesando solo la hoja que se usa (el archivo trae una hoja auxiliar enorme que no hace falta parsear) */
+  function readBook(buf, prefer){
+    var opt={type:"array",cellDates:true,cellFormula:false,cellHTML:false,cellNF:false,cellStyles:false};
+    if(prefer){ try{ var nm=XLSX.read(buf,{type:"array",bookSheets:true}).SheetNames; if(nm.indexOf(prefer)!==-1) opt.sheets=[prefer]; }catch(e){} }
+    return XLSX.read(buf,opt);
+  }
   function headerRow(ws){
+    if(!ws) return [];
     var ref = ws["!ref"]; if(!ref) return [];
     var r = XLSX.utils.decode_range(ref);
     var rows = XLSX.utils.sheet_to_json(ws,{header:1,range:{s:{r:r.s.r,c:r.s.c},e:{r:r.s.r,c:r.e.c}},defval:"",raw:true});
@@ -330,6 +340,7 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
     for(var r=1;r<rows.length;r++){
       var row = rows[r];
       var fecha = parseDate(row[iFecha]); if(!fecha) continue;
+      if(HIST_CUT && fecha<HIST_CUT) continue;   // fuera del historial configurado
       var store = clean(row[iStore]); if(!store) continue;
       var base = {
         fecha:fecha, mes: fecha.getFullYear()+"-"+pad(fecha.getMonth()+1),
@@ -381,6 +392,7 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
     var recs=[];
     for(var r=1;r<rows.length;r++){
       var row=rows[r]; var f=parseDate(row[iF]); if(!f) continue;
+      if(HIST_CUT && f<HIST_CUT) continue;   // fuera del historial configurado
       var abierto = clean(row[iAb]), per = iPer>=0 ? clean(row[iPer]) : "1";
       if(abierto==="1" && per!=="0") continue;     // visita efectiva: no entra a la tabla de motivos
       var motivo = abierto==="0" ? txt(row,iOpAb) : txt(row,iOpPer);
@@ -675,6 +687,7 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
     var parts=[];
     if(MOD.pop) parts.push("Ejecución POP: datos al "+fmtHM(MOD.pop));
     if(MOD.info) parts.push("Información General: "+fmtHM(MOD.info));
+    if(HIST_CUT) parts.push("historial desde "+ymd(HIST_CUT).slice(5).split("-").reverse().join("/"));
     if(CHK) parts.push("revisado "+new Date(CHK).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit",hour12:false}));
     $("modLine").textContent=parts.join(" · ");
   }
@@ -695,7 +708,7 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
   function readFile(file, kind){
     setStatus("Leyendo "+file.name+"…");
     return file.arrayBuffer().then(function(buf){
-      var wb = XLSX.read(buf,{type:"array",cellDates:true}); wb.__mod = new Date(file.lastModified);
+      var wb = readBook(buf, "Consulta1"); wb.__mod = new Date(file.lastModified);
       applyWb(wb, kind, file.name);
     }).catch(function(e){ setStatus("⚠ No se pudo leer el archivo: "+e.message,"err"); });
   }
@@ -714,13 +727,18 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
     if(!interactive) return Promise.reject(new Error("no-account"));
     return msalApp.loginPopup(req).then(function(r){ if(r.account) $("msUser").textContent=r.account.username; return r.accessToken; });
   }
-  function fetchBook(token, url){
+  // knownMod: si el archivo no cambió desde esa fecha, no se descarga (devuelve null). Siempre se procesa solo la hoja "Consulta1".
+  function fetchBook(token, url, knownMod){
     var base="https://graph.microsoft.com/v1.0/shares/u!"+b64url(url)+"/driveItem", opt={headers:{Authorization:"Bearer "+token}};
     var meta=fetch(base+"?$select=lastModifiedDateTime",opt).then(function(r){ return r.ok?r.json():null; }).catch(function(){ return null; });
-    return fetch(base+"/content",opt)
-      .then(function(res){ if(!res.ok) throw new Error("Graph HTTP "+res.status); return res.arrayBuffer(); })
-      .then(function(buf){ var wb=XLSX.read(buf,{type:"array",cellDates:true});
-        return meta.then(function(m){ if(m && m.lastModifiedDateTime) wb.__mod=new Date(m.lastModifiedDateTime); return wb; }); });
+    var start = knownMod ? meta.then(function(m){ return (m && m.lastModifiedDateTime && new Date(m.lastModifiedDateTime).getTime()===new Date(knownMod).getTime()) ? "SAME" : null; }) : Promise.resolve(null);
+    return start.then(function(same){
+      if(same==="SAME") return null;
+      return fetch(base+"/content",opt)
+        .then(function(res){ if(!res.ok) throw new Error("Graph HTTP "+res.status); return res.arrayBuffer(); })
+        .then(function(buf){ var wb=readBook(buf,"Consulta1");
+          return meta.then(function(m){ if(m && m.lastModifiedDateTime) wb.__mod=new Date(m.lastModifiedDateTime); return wb; }); });
+    });
   }
   // recarga automática cada 10 min mientras la pestaña esté visible (conserva los filtros elegidos)
   var autoTimer=null;
@@ -730,8 +748,8 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
       if(document.hidden || msBusy || !msalApp) return;
       msBusy=true; autoMode=true;
       msToken(false).then(function(t){
-        return fetchBook(t, MS.popUrl).then(function(wb){ applyWb(wb,"pop","SharePoint · 582-EJECUCIÓN-POP (en vivo)"); })
-          .then(function(){ return fetchBook(t, MS.infoUrl).then(function(wb2){ applyWb(wb2,"info",""); }).catch(function(){}); });
+        return fetchBook(t, MS.popUrl, MOD.pop).then(function(wb){ if(wb) applyWb(wb,"pop","SharePoint · 582-EJECUCIÓN-POP (en vivo)"); else { CHK=new Date(); showMod(); } })
+          .then(function(){ return fetchBook(t, MS.infoUrl, MOD.info).then(function(wb2){ if(wb2) applyWb(wb2,"info",""); }).catch(function(){}); });
       }).catch(function(){}).finally(function(){ msBusy=false; autoMode=false; });
     }, 10*60*1000);
   }
@@ -751,10 +769,13 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
     if(msBusy) return; msBusy=true;
     if(!silent) setStatus("Conectando con SharePoint…");
     msToken(!silent).then(function(token){
+      setStatus("Descargando datos de SharePoint…");
+      var infoP=fetchBook(token, MS.infoUrl); infoP.catch(function(){});   // se descarga en paralelo a Ejecución POP
       return fetchBook(token, MS.popUrl).then(function(wb){
         if(!applyWb(wb,"pop","SharePoint · 582-EJECUCIÓN-POP (en vivo)")) return;
         $("msRefreshBtn").hidden=false; startAuto();
-        return fetchBook(token, MS.infoUrl).then(function(wb2){
+        setStatus("✓ Ejecución POP cargada · procesando Información General…","ok");
+        return infoP.then(function(wb2){
           var base=$("statusLine").textContent;
           if(applyWb(wb2,"info","")) setStatus(base+" · "+$("statusLine").textContent.replace("✓ ",""),"ok");
         }).catch(function(e){
