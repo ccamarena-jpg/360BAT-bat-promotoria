@@ -411,22 +411,31 @@ tr:last-child td{border-bottom:none;}
     var y=/20\d\d/.exec(name); var year=y? +y[0] : fallback.getFullYear();
     return idx>=0? year+"-"+BAT.pad2(idx+1) : ymdMes(fallback);
   }
+  // Descarga un padrón; si el link principal falla (p. ej. no se puede abrir), prueba el alterno (si hay).
+  function fetchPad(token,url,alterno,kind){
+    var opt={prefer:/^BBDD/i,kind:kind,parse:BAT.parsePadron};
+    return BAT.fetchParsed(token,url,opt).catch(function(e){
+      if(!alterno) throw e;
+      return BAT.fetchParsed(token,alterno,{prefer:opt.prefer,kind:kind+":alt",parse:opt.parse}).then(function(r){ r.fallback=true; return r; });
+    });
+  }
   function connectLive(silent){
     if(busy) return; busy=true; if(!silent) setStatus("Conectando con SharePoint…");
     BAT.auth.token(!silent).then(function(token){
       setStatus("Descargando padrón de SharePoint…");
       if(VISTA==="padron"){
-        return BAT.fetchParsed(token,BAT.links.padron,{prefer:/^BBDD/i,kind:"pad",parse:BAT.parsePadron}).then(function(res){
+        return fetchPad(token,BAT.links.padronVigente||BAT.links.padron,BAT.links.padronVigente?BAT.links.padron:"","pad").then(function(res){
           if(res.data.error){ setStatus("⚠ "+res.data.error,"err"); return; }
           applyPadron(res.data,res.mod); $("msRefreshBtn").hidden=false;
-          setStatus("✓ Padrón: "+res.data.rows.length.toLocaleString("es-PE")+" tiendas · columnas "+res.data.labels.join(", ")+(res.cached?" (desde la caché)":""),"ok");
+          setStatus("✓ Padrón: "+res.data.rows.length.toLocaleString("es-PE")+" tiendas · columnas "+res.data.labels.join(", ")+(res.cached?" (desde la caché)":"")+(res.fallback?" · ⚠ se usó el archivo alterno: no se pudo abrir el padrón vigente":""),"ok");
         });
       }
       if(!CFG_PADRONES.length){ setStatus("⚠ Falta configurar los padrones en site-config.js (links.padrones).","err"); return; }
       return Promise.all(CFG_PADRONES.map(function(c){
-        return BAT.fetchParsed(token,c.url,{prefer:/^BBDD/i,kind:"pad:"+c.mes,parse:BAT.parsePadron}).then(function(res){ return {c:c,res:res}; }).catch(function(e){ return {c:c,err:e}; });
+        return fetchPad(token,c.url,c.alterno||"","pad:"+c.mes).then(function(res){ return {c:c,res:res}; }).catch(function(e){ return {c:c,err:e}; });
       })).then(function(list){
-        var errs=[]; list.forEach(function(x){ if(x.err){ errs.push(x.c.nombre||x.c.mes); return; } if(x.res.data.error){ errs.push(x.c.nombre); return; }
+        var errs=[]; list.forEach(function(x){ if(x.err){ errs.push((x.c.nombre||x.c.mes)+" ("+BAT.errorText(x.err,"padron.html").slice(0,60)+")"); return; } if(x.res.data.error){ errs.push(x.c.nombre); return; }
+          if(x.res.fallback) errs.push((x.c.nombre||x.c.mes)+" (se usó el archivo alterno)");
           addSnap({mes:x.c.mes,nombre:x.c.nombre||mesLabel(x.c.mes),rows:x.res.data.rows,ti:lastTi(x.res.data),mod:x.res.mod}); });
         if(SNAPS.length){ showApp(); refreshHControls(false); modLine(); renderH(); $("msRefreshBtn").hidden=false; }
         setStatus((SNAPS.length?"✓ "+SNAPS.length+" mes(es) cargado(s)":"⚠ No se pudo cargar ningún padrón")+(errs.length?" · con error: "+errs.join(", "):""),errs.length&&!SNAPS.length?"err":"ok");

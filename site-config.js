@@ -19,10 +19,15 @@ window.SITE = {
     popEjecucion: 'https://ttauditperu-my.sharepoint.com/:x:/g/personal/acastro_ttauditperu_onmicrosoft_com/IQC3XD0DBBHTTKUIDSqtcqVnAZl4eojITmpAFajAa6sdl5w?e=eAMDDe', // Materiales: 582-EJECUCIÓN-POP.xlsx
     infoGeneral:  'https://ttauditperu-my.sharepoint.com/:x:/g/personal/acastro_ttauditperu_onmicrosoft_com/IQDl5lLllIOWT74Z3_Ou_6muAZ4PxqwmXMyiqtVAl8TDU-Y?e=x6bLbV', // Materiales y Cobertura: 582-INFORMACIÖN GENERAL.xlsx
     padron:       'https://ttauditperu-my.sharepoint.com/:x:/g/personal/acastro_ttauditperu_onmicrosoft_com/IQCMw-AHmgwHQoMO0AV4UU4TAUqoAgk0rnzdVjQLg5T23SI?e=FbLrNF',  // Padrón vigente (Padrón, Cobertura): Propuesta Padrón Promotoría (la "biblia")
-    // Padrón de cada mes, para la vista Histórico (se compara un mes con otro). Cada mes nuevo: copiar el link del Excel y sumar una línea.
+    // Padrón vigente para la vista Padrón (Propuesta Padron Promotoria Noviembre 2026 USAR.xlsx). Es la ruta directa del archivo en el OneDrive
+    // de acastro; si Graph no la acepta, la vista cae sola al link de arriba (`padron`).
+    padronVigente: 'https://ttauditperu-my.sharepoint.com/personal/acastro_ttauditperu_onmicrosoft_com/Documents/MATHIAS/PADRONES/Propuesta%20Padron%20Promotoria%20Noviembre%202026%20USAR.xlsx',
+    // Padrón de cada mes, para la vista Histórico (se compara un mes con otro). Cada mes nuevo: sumar una línea con la ruta o el link del Excel.
+    // `alterno` = link de respaldo si la ruta directa no se puede abrir.
     padrones: [
-      { mes: '2026-10', nombre: 'Octubre 2026',   url: 'https://ttauditperu-my.sharepoint.com/:x:/g/personal/acastro_ttauditperu_onmicrosoft_com/IQCMw-AHmgwHQoMO0AV4UU4TAUqoAgk0rnzdVjQLg5T23SI?e=FbLrNF' },
-      { mes: '2026-11', nombre: 'Noviembre 2026', url: '' }   // PENDIENTE: pegar aquí el link de "Propuesta Padron Promotoria Noviembre 2026 USAR.xlsx"
+      { mes: '2026-10', nombre: 'Octubre 2026',   url: 'https://ttauditperu-my.sharepoint.com/personal/acastro_ttauditperu_onmicrosoft_com/Documents/MATHIAS/PADRONES/Propuesta%20Padron%20Promotoria%20Octubre%202026%20VF.xlsx',
+        alterno: 'https://ttauditperu-my.sharepoint.com/:x:/g/personal/acastro_ttauditperu_onmicrosoft_com/IQCMw-AHmgwHQoMO0AV4UU4TAUqoAgk0rnzdVjQLg5T23SI?e=FbLrNF' },
+      { mes: '2026-11', nombre: 'Noviembre 2026', url: 'https://ttauditperu-my.sharepoint.com/personal/acastro_ttauditperu_onmicrosoft_com/Documents/MATHIAS/PADRONES/Propuesta%20Padron%20Promotoria%20Noviembre%202026%20USAR.xlsx' }
     ]
   },
   vistas: [

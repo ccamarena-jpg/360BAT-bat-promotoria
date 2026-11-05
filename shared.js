@@ -47,7 +47,7 @@
     }catch(e){} }
     return XLSX.read(buf,opt);
   };
-  var PARSER_V="shared-1";
+  var PARSER_V="shared-2";
   function idb(){ return new Promise(function(res,rej){ try{ var rq=indexedDB.open("bat360cache",1); rq.onupgradeneeded=function(){ rq.result.createObjectStore("kv"); }; rq.onsuccess=function(){ res(rq.result); }; rq.onerror=function(){ rej(rq.error); }; }catch(e){ rej(e); } }); }
   B.cacheGet = function(k){ return idb().then(function(db){ return new Promise(function(res){ var r=db.transaction("kv").objectStore("kv").get(k); r.onsuccess=function(){ res(r.result||null); }; r.onerror=function(){ res(null); }; }); }).catch(function(){ return null; }); };
   B.cachePut = function(k,v){ return idb().then(function(db){ return new Promise(function(res){ var tx=db.transaction("kv","readwrite"); tx.objectStore("kv").put(v,k); tx.oncomplete=function(){ res(true); }; tx.onerror=function(){ res(false); }; }); }).catch(function(){ return false; }); };
@@ -150,6 +150,10 @@
         lat:lat, lon:lon, apertura:ap,
         t:triples.map(function(t){ return { promotor:B.clean(row[t.iP]), dia:B.norm(row[t.iD]), frec:B.clean(row[t.iF]).toUpperCase() }; }) });
     }
+    // Tiendas nuevas del padrón a veces vienen sin cadena: se completa con la cadena de las demás tiendas del mismo nombre (TAMBO, OXXO, PRIMAX…)
+    function prefixOf(s){ var m=/^\s*([A-Za-z0-9ÁÉÍÓÚÑ]+)/.exec(String(s||"")); return m? m[1].toUpperCase() : ""; }
+    var pref={}; out.forEach(function(r){ if(r.cadena){ var k=prefixOf(r.estacion||r.nombre); if(k && !pref[k]) pref[k]=r.cadena; } });
+    out.forEach(function(r){ if(!r.cadena){ r.cadena=pref[prefixOf(r.estacion||r.nombre)]||"(SIN CADENA)"; r.cadenaInferida=true; } });
     return { rows:out, labels:triples.map(function(t){return t.label;}), sheet:best };
   };
   /* Información General: una fila por visita; efectiva = local abierto y permitió la auditoría en counter. */
