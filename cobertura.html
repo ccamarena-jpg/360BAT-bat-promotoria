@@ -244,6 +244,7 @@ footer{font-size:12px; color:var(--text-muted); border-top:1px solid var(--borde
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+<script src="shared.js"></script>
 <script>
 /* Conexión en vivo con SharePoint (Graph). Misma app "bat360" de Entra que radar.html y materiales.html.
    Hay que registrar https://bat360.vercel.app/cobertura.html como Redirect URI (plataforma SPA). */
@@ -417,10 +418,17 @@ window.COB_REF_Q1 = "2026-10-26";
     set[ymd(mondayOf(new Date()))]=1;
     return Object.keys(set).sort().reverse();
   }
+  /* Padrón de la semana: si hay un padrón por mes (site-config.js → links.padrones), cada semana usa el de su mes
+     (octubre para semanas de octubre, noviembre para las de noviembre). Con un solo padrón (carga manual) se usa ese. */
+  var PADS=[];
+  function snapFor(monday){
+    if(PADS.length>1){ var s=window.BAT.padFor(PADS,monday); return {rows:s.data.rows, ti:s.data.labels.length-1}; }
+    return {rows:PAD.rows, ti:currentTriple()};
+  }
   function programacion(monday){
-    var q=weekQ(monday), ti=currentTriple(), today=new Date(); today.setHours(0,0,0,0);
+    var q=weekQ(monday), sp=snapFor(monday), ti=sp.ti, today=new Date(); today.setHours(0,0,0,0);
     var list=[];
-    PAD.rows.forEach(function(r){
+    sp.rows.forEach(function(r){
       var t=r.t[ti]; if(!t || !t.promotor) return;
       var di=DIAS.indexOf(t.dia); if(di<0) return;
       var f=t.frec;
@@ -838,7 +846,9 @@ window.COB_REF_Q1 = "2026-10-26";
       var curV=$("fVig").value;
       $("fVig").innerHTML=PAD.labels.map(function(l,i){ return '<option value="'+i+'">'+esc(l)+'</option>'; }).join("");
       $("fVig").value = curV!=="" && +curV<PAD.labels.length ? curV : String(PAD.labels.length-1);
-      var pr={}, ca={}; PAD.rows.forEach(function(r){ r.t.forEach(function(t){ if(t.promotor) pr[t.promotor]=1; }); if(r.cadena) ca[r.cadena]=1; });
+      $("fVig").closest(".filter-field").hidden = PADS.length>1;   // con un padrón por mes cada uno usa sus columnas vigentes
+      var pr={}, ca={};
+      (PADS.length>1? PADS.map(function(s){return s.data;}) : [PAD]).forEach(function(pd){ pd.rows.forEach(function(r){ r.t.forEach(function(t){ if(t.promotor) pr[t.promotor]=1; }); if(r.cadena) ca[r.cadena]=1; }); });
       msPro.set(Object.keys(pr).sort()); sel.pro=null; msCad.set(Object.keys(ca).sort()); sel.cad=null;
     }
   }
@@ -865,7 +875,7 @@ window.COB_REF_Q1 = "2026-10-26";
   function applyWb(wb,kind){
     if(kind==="pad"){
       var p=parsePadron(wb); if(p.error){ setStatus("⚠ "+p.error,"err"); return false; }
-      PAD=p; MOD.pad=wb.__mod||null; updateNames(); show(); showMod();
+      PADS=[]; PAD=p; MOD.pad=wb.__mod||null; updateNames(); show(); showMod();
       setStatus("✓ Padrón: "+p.rows.length.toLocaleString("es-PE")+" tiendas · columnas "+p.labels.join(", "),"ok"); return true;
     }
     var i=wb.__cached || parseInfo(wb); if(i.error){ setStatus("⚠ "+i.error,"err"); return false; }
@@ -941,8 +951,17 @@ window.COB_REF_Q1 = "2026-10-26";
     msToken(!silent).then(function(token){
       setStatus("Descargando datos de SharePoint…");
       var infoP=fetchBook(token,MS.infoUrl,"Consulta1",null,"info"); infoP.catch(function(){});   // se descarga en paralelo al padrón
-      return fetchBook(token,MS.padUrl).then(function(wb){ if(!applyWb(wb,"pad")) return; $("msRefreshBtn").hidden=false; startAuto();
-        setStatus("✓ Padrón cargado · procesando Información General…","ok");
+      // padrones: uno por mes (cada archivo vale para su mes); si el sitio no los define, se usa el único link de padrón
+      var padP = (window.BAT && BAT.links && BAT.links.padrones) ? BAT.padSnapshots(token).then(function(r){
+          if(!r.snaps.length) throw new Error(r.errors[0]||"No se pudo cargar ningún padrón.");
+          PADS=r.snaps; var last=r.snaps[r.snaps.length-1];
+          PAD=last.data; MOD.pad=last.mod||null; updateNames(); show(); showMod();
+          $("fileName").textContent="Padrones: "+r.snaps.map(function(s){return s.nombre;}).join(" + ")+" · Información General";
+          setStatus("✓ Padrones por mes: "+r.snaps.map(function(s){ return s.nombre+" ("+s.data.rows.length.toLocaleString("es-PE")+" tiendas)"; }).join(", ")+(r.errors.length?" · ⚠ "+r.errors.join("; "):""),"ok");
+          return true; })
+        : fetchBook(token,MS.padUrl).then(function(wb){ return applyWb(wb,"pad"); });
+      return padP.then(function(ok){ if(!ok) return; $("msRefreshBtn").hidden=false; startAuto();
+        setStatus($("statusLine").textContent+" · procesando Información General…","ok");
         return infoP.then(function(wb2){ var base=$("statusLine").textContent; if(applyWb(wb2,"info")) setStatus(base+" · "+$("statusLine").textContent.replace("✓ ",""),"ok"); loadMotivosRemote(token); })
           .catch(function(e){ setStatus($("statusLine").textContent+" · Información General no disponible ("+((e&&e.message)||"error")+"): cárgala manualmente.","ok"); }); });
     }).catch(function(e){ msError(e,silent); }).finally(function(){ busy=false; });
@@ -959,7 +978,7 @@ window.COB_REF_Q1 = "2026-10-26";
     $("msConnectBtn").addEventListener("click",function(){ loadLive(false); });
     $("msRefreshBtn").addEventListener("click",function(){ loadLive(false); });
   }
-  window.__cob={applyWb:applyWb, fetchBook:fetchBook, setWriteToken:function(f){ getWriteToken=f; }, setTarget:function(u){ MS.infoUrl=MS.infoUrl||"x"; motTarget=u; }, state:function(){ return {MOT:MOT,DIRTY:DIRTY}; }};   // gancho para verificación local
+  window.__cob={applyWb:applyWb, fetchBook:fetchBook, setPads:function(s){ PADS=s; PAD=s[s.length-1].data; updateNames(); show(); showMod(); }, setWriteToken:function(f){ getWriteToken=f; }, setTarget:function(u){ MS.infoUrl=MS.infoUrl||"x"; motTarget=u; }, state:function(){ return {MOT:MOT,DIRTY:DIRTY}; }};   // gancho para verificación local
   initMs();
 
   function reportHeight(){

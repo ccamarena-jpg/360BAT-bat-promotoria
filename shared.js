@@ -200,6 +200,33 @@
     return { visits:visits, byStore:by };
   };
 
+  /* ───────── padrón de cada mes ───────── */
+  /* Descarga los padrones configurados en site-config.js (links.padrones): cada archivo vale para SU mes (el de octubre es octubre,
+     el de noviembre es noviembre). Devuelve {snaps:[{mes,nombre,data,mod,fallback}] ordenados por mes, errors:[texto]}. */
+  B.padSnapshots = function(token){
+    var cfg=(B.links.padrones||[]).filter(function(x){ return x && x.url && x.mes; });
+    if(!cfg.length && B.links.padron){ var d=new Date(); cfg=[{mes:d.getFullYear()+"-"+B.pad2(d.getMonth()+1),nombre:"Padrón",url:B.links.padron}]; }
+    return Promise.all(cfg.map(function(c){
+      var base={prefer:/^BBDD/i,kind:"pad:"+c.mes,parse:B.parsePadron};
+      return B.fetchParsed(token,c.url,base).catch(function(e){
+        if(!c.alterno) throw e;
+        return B.fetchParsed(token,c.alterno,{prefer:base.prefer,kind:base.kind+":alt",parse:base.parse}).then(function(r){ r.fallback=true; return r; });
+      }).then(function(res){
+        if(res.data.error) return {error:(c.nombre||c.mes)+": "+res.data.error};
+        return {mes:c.mes,nombre:c.nombre||c.mes,data:res.data,mod:res.mod,fallback:!!res.fallback};
+      }).catch(function(e){ return {error:(c.nombre||c.mes)+": "+B.errorText(e,"")}; });
+    })).then(function(list){
+      return { snaps:list.filter(function(s){return s.data;}).sort(function(a,b){ return a.mes.localeCompare(b.mes); }),
+               errors:list.filter(function(s){return s.error;}).map(function(s){return s.error;}).concat(list.filter(function(s){return s.fallback;}).map(function(s){return s.nombre+" (se usó el archivo alterno)";})) };
+    });
+  };
+  /* Padrón que corresponde a una semana: el del mes de su lunes (o el más reciente anterior; si no hay, el primero). */
+  B.padFor = function(snaps, monday){
+    var mes=monday.getFullYear()+"-"+B.pad2(monday.getMonth()+1), pick=null;
+    snaps.forEach(function(s){ if(s.mes<=mes) pick=s; });
+    return pick || snaps[0];
+  };
+
   /* ───────── programación según el padrón ───────── */
   /* Tiendas que le tocan a cada promotor en la semana que empieza en `monday`, según día y frecuencia del trío `ti`. */
   B.programacion = function(padRows, ti, monday){

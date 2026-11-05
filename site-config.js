@@ -18,15 +18,11 @@ window.SITE = {
     validacion:   'https://ttauditperu-my.sharepoint.com/:x:/r/personal/acastro_ttauditperu_onmicrosoft_com/_layouts/15/Doc.aspx?sourcedoc=%7BF5BF96FA-7FC4-4D5D-B601-F00FC14B98AD%7D&file=VALIDACI%25u00d3N_2026.xlsx&action=default&mobileredirect=true', // Radar: VALIDACIÓN_2026.xlsx
     popEjecucion: 'https://ttauditperu-my.sharepoint.com/:x:/g/personal/acastro_ttauditperu_onmicrosoft_com/IQC3XD0DBBHTTKUIDSqtcqVnAZl4eojITmpAFajAa6sdl5w?e=eAMDDe', // Materiales: 582-EJECUCIÓN-POP.xlsx
     infoGeneral:  'https://ttauditperu-my.sharepoint.com/:x:/g/personal/acastro_ttauditperu_onmicrosoft_com/IQDl5lLllIOWT74Z3_Ou_6muAZ4PxqwmXMyiqtVAl8TDU-Y?e=x6bLbV', // Materiales y Cobertura: 582-INFORMACIÖN GENERAL.xlsx
-    padron:       'https://ttauditperu-my.sharepoint.com/:x:/g/personal/acastro_ttauditperu_onmicrosoft_com/IQCMw-AHmgwHQoMO0AV4UU4TAUqoAgk0rnzdVjQLg5T23SI?e=FbLrNF',  // Padrón vigente (Padrón, Cobertura): Propuesta Padrón Promotoría (la "biblia")
-    // Padrón vigente para la vista Padrón (Propuesta Padron Promotoria Noviembre 2026 USAR.xlsx). Es la ruta directa del archivo en el OneDrive
-    // de acastro; si Graph no la acepta, la vista cae sola al link de arriba (`padron`).
-    padronVigente: 'https://ttauditperu-my.sharepoint.com/personal/acastro_ttauditperu_onmicrosoft_com/Documents/MATHIAS/PADRONES/Propuesta%20Padron%20Promotoria%20Noviembre%202026%20USAR.xlsx',
-    // Padrón de cada mes, para la vista Histórico (se compara un mes con otro). Cada mes nuevo: sumar una línea con la ruta o el link del Excel.
-    // `alterno` = link de respaldo si la ruta directa no se puede abrir.
+    // Padrón de cada mes. Cada archivo vale para SU mes: el de octubre es octubre y el de noviembre es noviembre. Todas las vistas los usan:
+    //  · Padrón: el del mes en curso (o el más reciente) · Histórico: compara meses · Cobertura y Radar: cada semana usa el padrón de su mes.
+    // Cada mes nuevo: sumar una línea con la ruta del Excel (pestaña «BBDD <mes>»). Se puede agregar `alterno:` (link de respaldo) si hiciera falta.
     padrones: [
-      { mes: '2026-10', nombre: 'Octubre 2026',   url: 'https://ttauditperu-my.sharepoint.com/personal/acastro_ttauditperu_onmicrosoft_com/Documents/MATHIAS/PADRONES/Propuesta%20Padron%20Promotoria%20Octubre%202026%20VF.xlsx',
-        alterno: 'https://ttauditperu-my.sharepoint.com/:x:/g/personal/acastro_ttauditperu_onmicrosoft_com/IQCMw-AHmgwHQoMO0AV4UU4TAUqoAgk0rnzdVjQLg5T23SI?e=FbLrNF' },
+      { mes: '2026-10', nombre: 'Octubre 2026',   url: 'https://ttauditperu-my.sharepoint.com/personal/acastro_ttauditperu_onmicrosoft_com/Documents/MATHIAS/PADRONES/Propuesta%20Padron%20Promotoria%20Octubre%202026%20VF.xlsx' },
       { mes: '2026-11', nombre: 'Noviembre 2026', url: 'https://ttauditperu-my.sharepoint.com/personal/acastro_ttauditperu_onmicrosoft_com/Documents/MATHIAS/PADRONES/Propuesta%20Padron%20Promotoria%20Noviembre%202026%20USAR.xlsx' }
     ]
   },

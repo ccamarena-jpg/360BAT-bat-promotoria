@@ -1354,13 +1354,14 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
      La carga manual del Excel de VALIDACIÓN sigue disponible como alternativa. */
   var USE_INFO = !!(window.BAT && BAT.links && BAT.links.padron && BAT.links.infoGeneral);
   function cadenaCorta(estacion, cadena){ var m=/^([^\-–]{2,22}?)\s*[-–]/.exec(estacion||""); return String(m? m[1] : (cadena||"")).trim().toUpperCase(); }
-  function recordsFromInfo(pad, info){
-    var ti=pad.labels.length-1, today=new Date(); today.setHours(0,0,0,0);
+  function recordsFromInfo(snaps, info){      // snaps: padrones por mes ({mes,data}); cada semana usa el padrón de su mes
+    if(!snaps.length) return [];
+    var today=new Date(); today.setHours(0,0,0,0);
     var minD=null; info.visits.forEach(function(v){ if(!minD || v.fecha<minD) minD=v.fecha; });
     if(!minD) return [];
     var recs=[];
     for(var mon=BAT.mondayOf(minD); mon<=today; mon=BAT.addDays(mon,7)){
-      var dom=BAT.addDays(mon,6);
+      var dom=BAT.addDays(mon,6), pad=BAT.padFor(snaps,mon).data, ti=pad.labels.length-1;
       BAT.programacion(pad.rows, ti, mon).forEach(function(p){
         if(p.fecha>=today || p.fecha<minD) return;          // solo lo ya vencido y con datos disponibles
         var vs=(info.byStore[p.r.store]||[]).filter(function(v){ return v.fecha>=mon && v.fecha<=dom; });
@@ -1381,17 +1382,18 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
     BAT.auth.token(!silent).then(function(token){
       status.textContent="Descargando padrón e Información General…"; status.className="status-line";
       return Promise.all([
-        BAT.fetchParsed(token,BAT.links.padron,{prefer:/^BBDD/i,kind:"pad",parse:BAT.parsePadron}),
+        BAT.padSnapshots(token),
         BAT.fetchParsed(token,BAT.links.infoGeneral,{prefer:"Consulta1",kind:"info",parse:BAT.parseInfo}) ]);
     }).then(function(r){
-      var pad=r[0].data, info=r[1].data;
-      if(pad.error) throw new Error(pad.error); if(info.error) throw new Error(info.error);
-      var recs=recordsFromInfo(pad,info);
+      var snaps=r[0].snaps, info=r[1].data;
+      if(!snaps.length) throw new Error(r[0].errors[0]||"No se pudo cargar ningún padrón.");
+      if(info.error) throw new Error(info.error);
+      var recs=recordsFromInfo(snaps,info);
       document.getElementById("fileName").textContent="SharePoint · Información General + Padrón";
       onFileLoaded(recs);
       var mr=document.getElementById("msRefreshBtn"); if(mr) mr.hidden=false;
       if(!state.maxDate){ status.textContent="⚠ No se pudieron armar visitas programadas con estos archivos."; status.className="status-line err"; return; }
-      status.textContent="✓ "+recs.length.toLocaleString("es-PE")+" tiendas programadas · última fecha "+fmtDate(state.maxDate)+(r[1].mod?" · Información General al "+new Date(r[1].mod).toLocaleString("es-PE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false}):"");
+      status.textContent="✓ "+recs.length.toLocaleString("es-PE")+" tiendas programadas · padrones: "+snaps.map(function(s){return s.nombre;}).join(" + ")+(r[0].errors.length?" · ⚠ "+r[0].errors.join("; "):"")+" · última fecha "+fmtDate(state.maxDate)+(r[1].mod?" · Información General al "+new Date(r[1].mod).toLocaleString("es-PE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false}):"");
       status.className="status-line ok";
     }).catch(function(err){
       var msg=(err&&err.message)||String(err);

@@ -404,41 +404,29 @@ tr:last-child td{border-bottom:none;}
   });
 
   /* ═════════ carga de datos (SharePoint y manual) ═════════ */
-  var CFG_PADRONES=(function(){ var l=BAT.links.padrones; if(l&&l.length) return l.filter(function(x){return x&&x.url&&x.mes;}); return BAT.links.padron? [{mes:ymdMes(new Date()),nombre:mesLabel(ymdMes(new Date())),url:BAT.links.padron}] : []; })();
   function ymdMes(d){ return d.getFullYear()+"-"+BAT.pad2(d.getMonth()+1); }
   function mesDeNombre(name, fallback){
     var n=norm(name), idx=-1; MESES.forEach(function(m,i){ if(idx<0 && n.indexOf(norm(m))!==-1) idx=i; });
     var y=/20\d\d/.exec(name); var year=y? +y[0] : fallback.getFullYear();
     return idx>=0? year+"-"+BAT.pad2(idx+1) : ymdMes(fallback);
   }
-  // Descarga un padrón; si el link principal falla (p. ej. no se puede abrir), prueba el alterno (si hay).
-  function fetchPad(token,url,alterno,kind){
-    var opt={prefer:/^BBDD/i,kind:kind,parse:BAT.parsePadron};
-    return BAT.fetchParsed(token,url,opt).catch(function(e){
-      if(!alterno) throw e;
-      return BAT.fetchParsed(token,alterno,{prefer:opt.prefer,kind:kind+":alt",parse:opt.parse}).then(function(r){ r.fallback=true; return r; });
-    });
-  }
   function connectLive(silent){
     if(busy) return; busy=true; if(!silent) setStatus("Conectando con SharePoint…");
     BAT.auth.token(!silent).then(function(token){
-      setStatus("Descargando padrón de SharePoint…");
-      if(VISTA==="padron"){
-        return fetchPad(token,BAT.links.padronVigente||BAT.links.padron,BAT.links.padronVigente?BAT.links.padron:"","pad").then(function(res){
-          if(res.data.error){ setStatus("⚠ "+res.data.error,"err"); return; }
-          applyPadron(res.data,res.mod); $("msRefreshBtn").hidden=false;
-          setStatus("✓ Padrón: "+res.data.rows.length.toLocaleString("es-PE")+" tiendas · columnas "+res.data.labels.join(", ")+(res.cached?" (desde la caché)":"")+(res.fallback?" · ⚠ se usó el archivo alterno: no se pudo abrir el padrón vigente":""),"ok");
-        });
-      }
-      if(!CFG_PADRONES.length){ setStatus("⚠ Falta configurar los padrones en site-config.js (links.padrones).","err"); return; }
-      return Promise.all(CFG_PADRONES.map(function(c){
-        return fetchPad(token,c.url,c.alterno||"","pad:"+c.mes).then(function(res){ return {c:c,res:res}; }).catch(function(e){ return {c:c,err:e}; });
-      })).then(function(list){
-        var errs=[]; list.forEach(function(x){ if(x.err){ errs.push((x.c.nombre||x.c.mes)+" ("+BAT.errorText(x.err,"padron.html").slice(0,60)+")"); return; } if(x.res.data.error){ errs.push(x.c.nombre); return; }
-          if(x.res.fallback) errs.push((x.c.nombre||x.c.mes)+" (se usó el archivo alterno)");
-          addSnap({mes:x.c.mes,nombre:x.c.nombre||mesLabel(x.c.mes),rows:x.res.data.rows,ti:lastTi(x.res.data),mod:x.res.mod}); });
-        if(SNAPS.length){ showApp(); refreshHControls(false); modLine(); renderH(); $("msRefreshBtn").hidden=false; }
-        setStatus((SNAPS.length?"✓ "+SNAPS.length+" mes(es) cargado(s)":"⚠ No se pudo cargar ningún padrón")+(errs.length?" · con error: "+errs.join(", "):""),errs.length&&!SNAPS.length?"err":"ok");
+      setStatus("Descargando padrones de SharePoint…");
+      // Cada archivo vale para su mes (el de octubre es octubre, el de noviembre es noviembre). Padrón = el del mes en curso (o el más reciente).
+      return BAT.padSnapshots(token).then(function(r){
+        if(!r.snaps.length){ setStatus("⚠ No se pudo cargar ningún padrón"+(r.errors.length?": "+r.errors.join("; "):""),"err"); return; }
+        var warn=r.errors.length?" · ⚠ "+r.errors.join("; "):"";
+        if(VISTA==="padron"){
+          var s=BAT.padFor(r.snaps,new Date());
+          applyPadron(s.data,s.mod); $("msRefreshBtn").hidden=false;
+          setStatus("✓ Padrón de "+s.nombre+": "+s.data.rows.length.toLocaleString("es-PE")+" tiendas · pestaña "+s.data.sheet+warn,"ok");
+          return;
+        }
+        r.snaps.forEach(function(s){ addSnap({mes:s.mes,nombre:s.nombre,rows:s.data.rows,ti:lastTi(s.data),mod:s.mod}); });
+        showApp(); refreshHControls(false); modLine(); renderH(); $("msRefreshBtn").hidden=false;
+        setStatus("✓ "+SNAPS.length+" mes(es) cargado(s)"+warn,"ok");
       });
     }).catch(function(e){ var m=(e&&e.message)||""; if(silent&&(m==="no-account"||m==="silent-failed")) return; setStatus("⚠ "+BAT.errorText(e,"padron.html"),"err"); }).finally(function(){ busy=false; });
   }
