@@ -38,16 +38,24 @@
   B.weekQ = function(monday){ var n=Math.round((monday-REF)/(7*864e5)); return (((n%2)+2)%2===0)?"Q1":"Q2"; };
 
   /* ───────── lectura de Excel (solo la hoja necesaria) y caché local ───────── */
+  var MESES_N=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","setiembre","octubre","noviembre","diciembre"];
+  /* Pestaña del padrón: solo se usa la que se llama «BBDD <mes>». Si hubiera varias, la del mes más reciente. */
+  B.pickBBDD = function(names){
+    var c=names.filter(function(n){ return /^bbdd/i.test(B.clean(n)); }); if(!c.length) return null;
+    function rank(n){ var s=B.norm(n), r=-1; MESES_N.forEach(function(m,i){ if(s.indexOf(m)!==-1) r=(i>=9? i-1 : i); }); return r; }   // setiembre = septiembre
+    return c.slice().sort(function(a,b){ return rank(b)-rank(a); })[0];
+  };
   B.readBook = function(buf, prefer){
     var opt={type:"array",cellDates:true,cellFormula:false,cellHTML:false,cellNF:false,cellStyles:false};
     if(prefer){ try{
       var nm=XLSX.read(buf,{type:"array",bookSheets:true}).SheetNames, pick=null;
-      if(prefer instanceof RegExp){ pick=nm.filter(function(n){ return prefer.test(n); })[0]; } else if(nm.indexOf(prefer)!==-1) pick=prefer;
+      if(prefer instanceof RegExp){ var c=nm.filter(function(n){ return prefer.test(n); }); pick = c.length>1 && /bbdd/i.test(prefer.source) ? B.pickBBDD(c) : c[0]; }
+      else if(nm.indexOf(prefer)!==-1) pick=prefer;
       if(pick) opt.sheets=[pick];
     }catch(e){} }
     return XLSX.read(buf,opt);
   };
-  var PARSER_V="shared-2";
+  var PARSER_V="shared-3";
   function idb(){ return new Promise(function(res,rej){ try{ var rq=indexedDB.open("bat360cache",1); rq.onupgradeneeded=function(){ rq.result.createObjectStore("kv"); }; rq.onsuccess=function(){ res(rq.result); }; rq.onerror=function(){ rej(rq.error); }; }catch(e){ rej(e); } }); }
   B.cacheGet = function(k){ return idb().then(function(db){ return new Promise(function(res){ var r=db.transaction("kv").objectStore("kv").get(k); r.onsuccess=function(){ res(r.result||null); }; r.onerror=function(){ res(null); }; }); }).catch(function(){ return null; }); };
   B.cachePut = function(k,v){ return idb().then(function(db){ return new Promise(function(res){ var tx=db.transaction("kv","readwrite"); tx.objectStore("kv").put(v,k); tx.oncomplete=function(){ res(true); }; tx.onerror=function(){ res(false); }; }); }).catch(function(){ return false; }); };
@@ -117,12 +125,12 @@
   function coord(v){ var n=typeof v==="number"? v : parseFloat(String(v==null?"":v).replace(",",".")); return isFinite(n)? n : null; }
   /* Padrón: una fila por tienda, con todos los tríos promotor / día / frecuencia (por mes). */
   B.parsePadron = function(wb){
-    var cands=wb.SheetNames.filter(function(sn){
-      var h=headerRow(wb.Sheets[sn]).map(B.norm);
-      return h.some(function(c){return c.indexOf("codigo tt audit")===0;}) && h.some(function(c){return c.indexOf("frecuencia")===0;});
-    });
-    if(!cands.length) return {error:"No encontré una hoja de padrón (con CÓDIGO TT AUDIT y FRECUENCIA)."};
-    var best=cands.filter(function(s){return /^bbdd/i.test(s);})[0]||cands[0];
+    // Solo la pestaña «BBDD <mes>» (las demás hojas del libro —TD, Hoja1…, CODIGOS— no son el padrón)
+    var best=B.pickBBDD(wb.SheetNames.filter(function(sn){ return wb.Sheets[sn]; }));
+    if(!best) return {error:"No encontré la pestaña «BBDD <mes>» del padrón (por ejemplo «BBDD NOVIEMBRE»)."};
+    var hh=headerRow(wb.Sheets[best]).map(B.norm);
+    if(!(hh.some(function(c){return c.indexOf("codigo tt audit")===0;}) && hh.some(function(c){return c.indexOf("frecuencia")===0;})))
+      return {error:"La pestaña «"+best+"» no tiene las columnas CÓDIGO TT AUDIT y FRECUENCIA."};
     var rows=XLSX.utils.sheet_to_json(wb.Sheets[best],{header:1,defval:"",raw:true,blankrows:false});
     var head=rows[0].map(B.norm);
     function idx(f){ for(var i=0;i<head.length;i++) if(f(head[i])) return i; return -1; }
@@ -132,11 +140,15 @@
         iZon=idx(function(c){return c.indexOf("lima/kc")===0;}), iCad=idx(function(c){return c==="cadenas"||c==="cadena";}),
         iLat=idx(function(c){return c==="latitud";}), iLon=idx(function(c){return c==="longitud";}), iNue=idx(function(c){return c.indexOf("fecha nueva apertura")===0;});
     var triples=[];
+    // Cada trío = columna «DIA DE VISITA …» con su PROMOTOR (la columna de promotor más cercana a su izquierda) y su FRECUENCIA (a su derecha).
+    // Se arma por posición y no por nombre, porque a veces los títulos no coinciden (p. ej. «PROMOTOR JULIO» junto a «DIA DE VISITA OCTUBRE»).
     head.forEach(function(h,i){
-      var m=/^promotor(?: (.+))?$/.exec(h); if(!m) return;
-      var suf=m[1]||"";
-      var iD=idx(function(c){ return suf? c==="dia de visita "+suf : c==="dia de visita"; }), iF=idx(function(c){ return suf? c==="frecuencia "+suf : c==="frecuencia"; });
-      if(iD>=0 && iF>=0) triples.push({label:suf?suf.toUpperCase():"BASE", iP:i, iD:iD, iF:iF});
+      if(h.indexOf("dia de visita")!==0) return;
+      var iP=-1, iF=-1, k;
+      for(k=i-1;k>=0;k--){ if(head[k].indexOf("dia de visita")===0) break; if(head[k].indexOf("promotor")===0){ iP=k; break; } }
+      for(k=i+1;k<head.length;k++){ if(head[k].indexOf("dia de visita")===0 || head[k].indexOf("promotor")===0) break; if(head[k].indexOf("frecuencia")===0){ iF=k; break; } }
+      var suf=h.replace("dia de visita","").trim();
+      if(iP>=0 && iF>=0) triples.push({label:suf?suf.toUpperCase():"BASE", iP:iP, iD:i, iF:iF});
     });
     if(!triples.length) return {error:"No encontré columnas PROMOTOR / DIA DE VISITA / FRECUENCIA en el padrón."};
     var out=[];

@@ -319,14 +319,14 @@ window.COB_REF_Q1 = "2026-10-26";
     return rows[0]||[];
   }
   function parsePadron(wb){
-    var best=null, cands=[];
-    wb.SheetNames.forEach(function(sn){
-      var h=headerRow(wb.Sheets[sn]).map(norm);
-      var okH = h.some(function(c){return c.indexOf("codigo tt audit")===0;}) && h.some(function(c){return c.indexOf("frecuencia")===0;});
-      if(okH) cands.push(sn);
-    });
-    if(!cands.length) return {error:"No encontré una hoja de padrón (con CÓDIGO TT AUDIT y FRECUENCIA)."};
-    best = cands.filter(function(s){ return /^bbdd/i.test(s); })[0] || cands[0];
+    // Solo la pestaña «BBDD <mes>» (las demás hojas del libro no son el padrón). Si hubiera varias, la del mes más reciente.
+    var MN=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","setiembre","octubre","noviembre","diciembre"];
+    function rankMes(n){ var s=norm(n), r=-1; MN.forEach(function(m,i){ if(s.indexOf(m)!==-1) r=(i>=9? i-1 : i); }); return r; }
+    var bb=wb.SheetNames.filter(function(sn){ return /^bbdd/i.test(clean(sn)) && wb.Sheets[sn]; }).sort(function(a,b){ return rankMes(b)-rankMes(a); });
+    if(!bb.length) return {error:"No encontré la pestaña «BBDD <mes>» del padrón (por ejemplo «BBDD NOVIEMBRE»)."};
+    var best=bb[0], hh=headerRow(wb.Sheets[best]).map(norm);
+    if(!(hh.some(function(c){return c.indexOf("codigo tt audit")===0;}) && hh.some(function(c){return c.indexOf("frecuencia")===0;})))
+      return {error:"La pestaña «"+best+"» no tiene las columnas CÓDIGO TT AUDIT y FRECUENCIA."};
     var rows=XLSX.utils.sheet_to_json(wb.Sheets[best],{header:1,defval:"",raw:true,blankrows:false});
     var head=rows[0].map(norm);
     function idx(f){ for(var i=0;i<head.length;i++) if(f(head[i])) return i; return -1; }
@@ -337,12 +337,15 @@ window.COB_REF_Q1 = "2026-10-26";
         iCad=idx(function(c){return c==="cadenas"||c==="cadena";});
     // tríos promotor / día / frecuencia por sufijo (mayo, octubre, o sin sufijo)
     var triples=[];
+    // Cada trío = columna «DIA DE VISITA …» con su PROMOTOR (la columna de promotor más cercana a su izquierda) y su FRECUENCIA (a su derecha).
+    // Se arma por posición y no por nombre, porque a veces los títulos no coinciden (p. ej. «PROMOTOR JULIO» junto a «DIA DE VISITA OCTUBRE»).
     head.forEach(function(h,i){
-      var m=/^promotor(?: (.+))?$/.exec(h); if(!m) return;
-      var suf=m[1]||"";
-      var iD=idx(function(c){ return suf ? c==="dia de visita "+suf : c==="dia de visita"; });
-      var iF=idx(function(c){ return suf ? c==="frecuencia "+suf : c==="frecuencia"; });
-      if(iD>=0 && iF>=0) triples.push({label:suf?suf.toUpperCase():"BASE", iP:i, iD:iD, iF:iF});
+      if(h.indexOf("dia de visita")!==0) return;
+      var iP=-1, iF=-1, k;
+      for(k=i-1;k>=0;k--){ if(head[k].indexOf("dia de visita")===0) break; if(head[k].indexOf("promotor")===0){ iP=k; break; } }
+      for(k=i+1;k<head.length;k++){ if(head[k].indexOf("dia de visita")===0 || head[k].indexOf("promotor")===0) break; if(head[k].indexOf("frecuencia")===0){ iF=k; break; } }
+      var suf=h.replace("dia de visita","").trim();
+      if(iP>=0 && iF>=0) triples.push({label:suf?suf.toUpperCase():"BASE", iP:iP, iD:i, iF:iF});
     });
     if(!triples.length) return {error:"No encontré columnas PROMOTOR / DIA DE VISITA / FRECUENCIA en el padrón."};
     var out=[];
