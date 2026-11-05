@@ -10,6 +10,8 @@ window.SITE = {
     'ccamarena@ttaudit.com': { vistas: ['*'] },
     'acastro@ttaudit.com':   { vistas: ['*'] }
   },
+  // Supervisores que aparecen en el «Planning del supervisor» cuando la hoja «Calendario sup.» aún no tiene la semana (normalmente salen de la propia hoja).
+  supervisores: ['GIAN', 'JUAN ROSAS'],
   // Historial que procesan Materiales y Cobertura: solo los últimos N meses (incluido el actual). 0 = todo el archivo.
   historialMeses: 3,
   // Todos los links de SharePoint que usa el sitio, en un solo lugar. Las páginas (radar, materiales, cobertura)

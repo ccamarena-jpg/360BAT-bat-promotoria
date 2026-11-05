@@ -77,6 +77,15 @@ input.motivo.dirty{border-color:var(--warn); background:var(--warn-bg);}
 input.motivo.saved{border-color:var(--ok);}
 a.foto{text-decoration:none; font-size:15px; margin-right:6px; white-space:nowrap;}
 a.foto small{font-size:10.5px; color:var(--text-muted); margin-left:2px;}
+table.cal td.cell .incbtn{border:none;background:transparent;cursor:pointer;font-size:11px;color:var(--text-muted);padding:3px 0 0;display:block;text-align:left;font-family:inherit;}
+table.cal td.cell .incbtn:hover{color:var(--accent);text-decoration:underline;}
+.inc-tag{display:block;margin-top:4px;font-size:11.5px;font-weight:600;color:var(--crit);}
+table.plan td input.pl{font-family:inherit;font-size:12.5px;padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:100%;min-width:130px;}
+table.plan td input.pl.dirty{border-color:var(--warn);background:var(--warn-bg);}
+.plan-week{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:10px 12px 4px;font-weight:600;font-size:13px;}
+.inc-form{padding:16px 18px;display:grid;gap:12px;}
+.inc-form label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);font-weight:600;display:block;margin-bottom:4px;}
+.inc-form select,.inc-form input{font-family:inherit;font-size:13.5px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:100%;}
 .filter-hint{font-size:12px; color:var(--text-muted); margin:0 0 16px;}
 .ms{position:relative;}
 .ms-btn{font-family:inherit; font-size:13px; padding:7px 10px; border-radius:8px; border:1px solid var(--border);
@@ -224,9 +233,21 @@ footer{font-size:12px; color:var(--text-muted); border-top:1px solid var(--borde
 
   <div id="vCal" hidden>
     <section class="block">
+      <h2>Planning del supervisor</h2>
+      <p class="sub">Ruta de cada supervisor día por día. Lo que escribas aquí se guarda en la hoja «Calendario sup.» del Excel de padrón de ese mes.</p>
+      <div class="status-line" id="planStatus"></div>
+      <div id="planBox"></div>
+    </section>
+    <section class="block">
       <h2>Programación de la semana</h2>
       <p class="sub">Por promotor y día: cuántas tiendas le tocan y en qué distritos. Colores: verde = todo cubierto, rojo = nada cubierto, ámbar = parcial, gris = día pendiente.</p>
       <div class="table-wrap" id="tblCal"></div>
+    </section>
+    <section class="block">
+      <h2>Incidencias del rango</h2>
+      <p class="sub">Cuando un promotor no salió, cambió de día o de ruta: usa «⚑ Incidencia» en su día del calendario. Se guarda en la hoja «INCIDENCIAS» del Excel de padrón.</p>
+      <div class="status-line" id="incStatus"></div>
+      <div class="table-wrap" id="tblInc"></div>
     </section>
   </div>
 </div>
@@ -510,7 +531,7 @@ window.COB_REF_Q1 = "2026-10-26";
     $("filterHint").textContent="Del "+ymd(rg.d1)+" al "+ymd(rg.d2)+" · "+(rg.mondays.length>1? rg.mondays.length+" semanas (lunes y quincena: "+qs.join(", ")+")" : "semana "+qs[0]+" (la QUINCENAL de esa quincena toca; SEMANAL toca siempre)")+". "+
       (rg.truncada? "Rango limitado a "+MAX_SEM+" semanas. " : "")+
       (INFO? "" : "Falta cargar Información General: todo aparece como no cubierto/pendiente. ");
-    if(view==="cal") { renderCal(prog); reportHeight(); return; }
+    if(view==="cal") { renderCal(prog); renderPlan(rg.mondays); renderInc(rg); reportHeight(); return; }
 
     var vencidas=prog.filter(function(p){return p.estado!=="pend";}), cub=vencidas.filter(function(p){return p.estado!=="nocub";});
     var efect=cub.filter(function(p){return p.efectiva;}), pend=prog.length-vencidas.length;
@@ -552,7 +573,7 @@ window.COB_REF_Q1 = "2026-10-26";
       nc.slice(0,300).map(function(p){
         var k=motKey(p), m=MOT[k], cls=DIRTY[k]?" dirty":(m?" saved":"");
         return '<tr><td class="mono">'+DIAS_T[p.di].slice(0,3)+" "+ymd(p.fecha).slice(5)+'</td><td>'+esc(p.promotor)+'</td><td class="mono">'+esc(p.r.store)+'</td><td>'+esc(p.r.estacion||p.r.store)+'</td><td>'+esc(p.r.distrito)+
-          '</td><td><input class="motivo'+cls+'" list="dlMotivos" data-k="'+esc(k)+'" value="'+esc(m?m.motivo:"")+'" placeholder="Escribir motivo…"></td></tr>'; }).join("")+'</tbody></table>';
+          '</td><td><input class="motivo'+cls+'" list="dlMotivos" data-k="'+esc(k)+'" value="'+esc(m?m.motivo:"")+'" placeholder="'+esc(incPH(p))+'"></td></tr>'; }).join("")+'</tbody></table>';
     lastNC = {}; nc.forEach(function(p){ lastNC[motKey(p)]=p; });
     updateMotBar();
     lastProg = prog;
@@ -672,6 +693,271 @@ window.COB_REF_Q1 = "2026-10-26";
     }).catch(function(){ /* sin archivo todavía o sin permiso de lectura: se ignora */ });
   }
 
+  /* ───────── Planning del supervisor e incidencias: se leen/escriben en el Excel del padrón (Graph Excel API) ─────────
+     · Hoja «Calendario sup.»: bloques [fila de fechas / fila ASIGNADO·LUNES…SABADO·COMENTARIO / una fila por supervisor].
+     · Hoja «INCIDENCIAS» (se crea sola): CLAVE, FECHA, PROMOTOR, TIPO, MOTIVO, REGISTRADO POR, REGISTRADO EL.
+     Solo se tocan las celdas que cambian; antes de escribir se vuelve a leer la hoja para no pisar lo que otra persona haya puesto. */
+  var PLAN_SHEET="Calendario sup.", INC_SHEET="INCIDENCIAS";
+  var INC_COLS=["CLAVE","FECHA","PROMOTOR","TIPO","MOTIVO","REGISTRADO POR","REGISTRADO EL"];
+  var INC_TIPOS=["No salió","Cambió de día","Cambió de ruta","Otro"];
+  var INC_MOTIVOS=["Descanso médico","Vacaciones","Permiso","Falta injustificada","Problema de transporte","Capacitación","Apoyo en otra ruta","Tienda cerrada / sin acceso"];
+  var DAYS6=["lunes","martes","miercoles","jueves","viernes","sabado"], MON_ES=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  var MON_ANY={ene:0,jan:0,feb:1,mar:2,abr:3,apr:3,may:4,jun:5,jul:6,ago:7,aug:7,sep:8,set:8,oct:9,nov:10,dic:11,dec:11};
+  var PLANF={}, INCF={}, PLANUI={}, INC_PEND={}, INC_ALL={}, wbCache={};
+  try{ INC_PEND=JSON.parse(localStorage.getItem("bat360_inc_pend")||"{}")||{}; }catch(e){ INC_PEND={}; }
+  function persistInc(){ try{ localStorage.setItem("bat360_inc_pend",JSON.stringify(INC_PEND)); }catch(e){} }
+  function colL(n){ var s=""; while(n>0){ var m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); } return s; }
+  function colN(s){ var n=0; for(var i=0;i<s.length;i++) n=n*26+(s.charCodeAt(i)-64); return n; }
+  function padFile(date){   // padrón (url + mes) del mes del lunes de esa fecha
+    var L=(window.BAT&&BAT.links&&BAT.links.padrones)||[]; if(!L.length) return null;
+    var mk=ymd(mondayOf(date)).slice(0,7), f=null; L.forEach(function(x){ if(x.mes===mk) f=x; });
+    return f||L[L.length-1];
+  }
+  function supList(){ try{ var s=window.parent!==window && window.parent.SITE && window.parent.SITE.supervisores; if(s&&s.length) return s; }catch(e){} return ["GIAN","JUAN ROSAS"]; }
+  function wbBase(token,url){
+    if(wbCache[url]) return Promise.resolve(wbCache[url]);
+    return gjson(token,GRAPH+"/shares/u!"+b64url(url)+"/driveItem?$select=id,parentReference").then(function(it){
+      if(!it||!it.parentReference) throw new Error("No pude ubicar el Excel del padrón.");
+      return (wbCache[url]=GRAPH+"/drives/"+it.parentReference.driveId+"/items/"+it.id+"/workbook"); });
+  }
+  function wsUrl(base,name){ return base+"/worksheets('"+encodeURIComponent(name)+"')"; }
+  function gsend(token,method,url,body){
+    return fetch(url,{method:method,headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(body)}).then(function(r){
+      if(!r.ok) throw new Error("Graph HTTP "+r.status); return r.json().catch(function(){ return {}; }); });
+  }
+  function readSheet(token,base,name){
+    return gjson(token,wsUrl(base,name)+"/usedRange?$select=address,text,values").then(function(u){
+      if(!u||!u.address) return null;
+      var m=/!\$?([A-Z]+)\$?(\d+)/.exec(u.address); if(!m) return null;
+      return { c0:colN(m[1]), r0:+m[2], text:u.text||[], values:u.values||[] };
+    });
+  }
+  function patchRange(token,base,sheet,addr,vals){
+    var safe=vals.map(function(row){ return row.map(function(v){ v=v==null?"":String(v); return /^[=+\-@]/.test(v)?"'"+v:v; }); });
+    return gsend(token,"PATCH",wsUrl(base,sheet)+"/range(address='"+addr+"')",{values:safe});
+  }
+  function cellDate(sh,i,j,year){   // fecha de una celda: serial de Excel o texto "2-Nov"
+    var v=sh.values[i]&&sh.values[i][j], t=sh.text[i]&&sh.text[i][j];
+    if(typeof v==="number" && v>20000 && v<80000) return parseDate(v);
+    var m=/^(\d{1,2})[\s\-\/]([A-Za-zñÑ]{3})/.exec(clean(t||v)); if(!m) return null;
+    var mo=MON_ANY[m[2].toLowerCase()]; return mo==null? null : new Date(year,mo,+m[1]);
+  }
+  function parsePlan(sh,year){
+    var blocks=[], n=sh.values.length;
+    for(var i=0;i<n;i++){
+      var row=sh.values[i], cols={days:[]}, hasAs=false;
+      for(var j=0;j<row.length;j++){ var h=norm(row[j]);
+        if(h==="asignado"){ cols.asig=j; hasAs=true; } else if(h.indexOf("lima/kc")===0) cols.zona=j; else if(h==="comentario") cols.com=j;
+        else { var di=DAYS6.indexOf(h); if(di>=0) cols.days[di]=j; } }
+      if(!hasAs || cols.days.length<6 || cols.days.indexOf(undefined)!==-1) continue;
+      var monday=i>0? cellDate(sh,i-1,cols.days[0],year) : null;
+      var rows=[]; for(var k=i+1;k<n;k++){ var a=clean(sh.values[k][cols.asig]); if(!a) break;
+        rows.push({ idx:k, row:sh.r0+k, asig:a, zona:cols.zona!=null?clean(sh.values[k][cols.zona]):"", vals:cols.days.map(function(c){ return clean(sh.values[k][c]); }), com:cols.com!=null?clean(sh.values[k][cols.com]):"" }); }
+      blocks.push({ headIdx:i, headRow:sh.r0+i, monday:monday?ymd(monday):null, cols:cols, rows:rows, head:row.slice() });
+    }
+    return { blocks:blocks, lastRow:sh.r0+n-1, r0:sh.r0, c0:sh.c0 };
+  }
+  function loadPlanFile(token,pf){
+    return wbBase(token,pf.url).then(function(base){ return readSheet(token,base,PLAN_SHEET); }).then(function(sh){
+      PLANF[pf.url]= sh? parsePlan(sh,+pf.mes.slice(0,4)) : {blocks:[],lastRow:0,missing:true};
+    });
+  }
+  function parseInc(sh){
+    var out={}; if(!sh) return out; var h=(sh.values[0]||[]).map(function(c){return norm(c).toUpperCase();});
+    function ix(n){ return h.indexOf(n.toLowerCase().toUpperCase()); }
+    var iK=ix("CLAVE"), iF=ix("FECHA"), iP=ix("PROMOTOR"), iT=ix("TIPO"), iM=ix("MOTIVO"), iU=ix("REGISTRADO POR"), iE=ix("REGISTRADO EL");
+    if(iK<0) return out;
+    for(var i=1;i<sh.values.length;i++){ var r=sh.values[i], k=clean(r[iK]); if(!k) continue;
+      out[k]={ promotor:clean(r[iP]), fecha:clean(r[iF]), tipo:clean(r[iT]), motivo:clean(r[iM]), por:clean(r[iU]), el:clean(r[iE]) }; }
+    return out;
+  }
+  function loadIncFile(token,pf){
+    return wbBase(token,pf.url).then(function(base){ return readSheet(token,base,INC_SHEET); }).then(function(sh){ INCF[pf.url]=parseInc(sh); });
+  }
+  function recalcInc(){
+    INC_ALL={}; Object.keys(INCF).forEach(function(u){ Object.keys(INCF[u]).forEach(function(k){ INC_ALL[k]=INCF[u][k]; }); });
+    Object.keys(INC_PEND).forEach(function(k){ if(INC_PEND[k].del) delete INC_ALL[k]; else INC_ALL[k]=Object.assign({pend:true},INC_PEND[k]); });
+  }
+  recalcInc();
+  function loadExtras(token){
+    var L=(window.BAT&&BAT.links&&BAT.links.padrones)||[];
+    return Promise.all(L.map(function(pf){
+      return Promise.all([ loadPlanFile(token,pf).catch(function(e){ PLANF[pf.url]={blocks:[],lastRow:0,error:(e&&e.message)||"error"}; }),
+                           loadIncFile(token,pf).catch(function(){}) ]); }))
+      .then(function(){ recalcInc(); if(view==="cal") render(); });
+  }
+
+  /* — Planning supervisor: edición por semana — */
+  function planState(wk,pf){
+    var cur=PLANUI[wk]; if(cur && cur.dirty) return cur;
+    var pl=PLANF[pf.url], blk=pl && pl.blocks.filter(function(b){ return b.monday===wk; })[0];
+    var sups, src;
+    if(blk){ src=blk; sups=blk.rows.map(function(r){ return {asig:r.asig,zona:r.zona,vals:r.vals.slice(),com:r.com}; }); }
+    else {
+      var ref=pl && pl.blocks[pl.blocks.length-1], names=ref? ref.rows : supList().map(function(s){ return {asig:s,zona:"LIMA"}; });
+      sups=names.map(function(r){ return {asig:r.asig,zona:r.zona||"",vals:["","","","","",""],com:""}; });
+    }
+    var st={ wk:wk, pf:pf, nuevo:!blk, dirty:false, sups:sups, orig:JSON.stringify(sups) };
+    PLANUI[wk]=st; return st;
+  }
+  function renderPlan(mondays){
+    var box=$("planBox"), L=(window.BAT&&BAT.links&&BAT.links.padrones)||[];
+    if(!L.length){ box.innerHTML='<div class="empty">Este sitio no tiene configurados los padrones por mes.</div>'; return; }
+    var loaded=Object.keys(PLANF).length>0;
+    if(!loaded){ box.innerHTML='<div class="empty">Conecta con SharePoint para ver y cargar el planning del supervisor.</div>'; return; }
+    box.innerHTML=mondays.map(function(m){
+      var wk=ymd(m), pf=padFile(m), pl=PLANF[pf.url];
+      if(pl && pl.error) return '<div class="empty">'+esc(pf.nombre)+': no se pudo leer «'+PLAN_SHEET+'» ('+esc(pl.error)+').</div>';
+      if(pl && pl.missing) return '<div class="empty">El padrón de '+esc(pf.nombre)+' no tiene la hoja «'+PLAN_SHEET+'».</div>';
+      var st=planState(wk,pf);
+      return '<div class="plan-week"><span>Semana del '+wk+' · '+weekQ(m)+'</span>'+(st.nuevo?'<span class="pill pend">Semana nueva (se agregará un bloque al final de la hoja)</span>':'')+
+        '<button class="btn ghost" type="button" data-plansave="'+wk+'"'+(st.dirty?'':' disabled')+'>💾 Guardar planning</button></div>'+
+        '<div class="table-wrap"><table class="plan"><thead><tr><th>Supervisor</th>'+DIAS_T.slice(0,6).map(function(d,i){ return '<th>'+d+' '+ymd(addDays(m,i)).slice(8)+'</th>'; }).join("")+'<th>Comentario</th></tr></thead><tbody>'+
+        st.sups.map(function(s,si){
+          var o=JSON.parse(st.orig)[si]||{vals:[],com:""};
+          return '<tr><td><b>'+esc(s.asig)+'</b><div style="font-size:11px;color:var(--text-muted)">'+esc(s.zona)+'</div></td>'+
+            s.vals.map(function(v,di){ return '<td><input class="pl'+(v!==(o.vals[di]||"")?" dirty":"")+'" data-w="'+wk+'" data-s="'+si+'" data-d="'+di+'" value="'+esc(v)+'" placeholder="Ruta del día…"></td>'; }).join("")+
+            '<td><input class="pl'+(s.com!==(o.com||"")?" dirty":"")+'" data-w="'+wk+'" data-s="'+si+'" data-d="c" value="'+esc(s.com)+'"></td></tr>'; }).join("")+'</tbody></table></div>';
+    }).join("");
+  }
+  function planStatus(m,c){ var s=$("planStatus"); s.textContent=m||""; s.className="status-line"+(c?" "+c:""); }
+  $("planBox").addEventListener("input",function(e){
+    var inp=e.target.closest("input.pl"); if(!inp) return;
+    var st=PLANUI[inp.getAttribute("data-w")]; if(!st) return;
+    var s=st.sups[+inp.getAttribute("data-s")], d=inp.getAttribute("data-d"), v=inp.value;
+    if(d==="c") s.com=v; else s.vals[+d]=v;
+    var o=JSON.parse(st.orig)[+inp.getAttribute("data-s")]||{vals:[],com:""};
+    inp.classList.toggle("dirty", v!==(d==="c"? (o.com||"") : (o.vals[+d]||"")));
+    st.dirty=JSON.stringify(st.sups)!==st.orig || st.nuevo && st.sups.some(function(x){ return x.vals.some(Boolean)||x.com; });
+    var b=$("planBox").querySelector('[data-plansave="'+st.wk+'"]'); if(b) b.disabled=!st.dirty;
+  });
+  $("planBox").addEventListener("click",function(e){
+    var b=e.target.closest("button[data-plansave]"); if(!b||b.disabled) return;
+    savePlan(b.getAttribute("data-plansave"));
+  });
+  function savePlan(wk){
+    var st=PLANUI[wk]; if(!st) return; planStatus("Guardando planning en SharePoint…","");
+    var tok=null;
+    getWriteToken().then(function(t){ tok=t; return writePlan(t,st); }).then(function(){
+      return loadPlanFile(tok,st.pf); }).then(function(){
+      st.dirty=false; delete PLANUI[wk]; planStatus("✓ Planning guardado en «"+PLAN_SHEET+"» ("+st.pf.nombre+").","ok"); render();
+    }).catch(function(e){ planStatus("⚠ "+writeError(e,"Tu planning sigue en pantalla; vuelve a intentar."),"err"); });
+  }
+  function writeError(err,tail){
+    var m=(err&&err.message)||String(err);
+    if(m==="no-msal") return "Conecta primero con SharePoint.";
+    if(m.indexOf("consent")!==-1||m.indexOf("AADSTS65001")!==-1||m.indexOf("AADSTS90094")!==-1) return "Falta el permiso Files.ReadWrite.All en la app bat360 (Entra → API permissions → agregar y dar consentimiento).";
+    if(m.indexOf("Graph HTTP 403")!==-1) return "Tu cuenta no puede escribir en el padrón (403). Pide permiso de edición.";
+    if(m.indexOf("Graph HTTP 423")!==-1) return "El Excel está bloqueado en este momento (423). Inténtalo en un minuto.";
+    if(m.indexOf("popup")!==-1) return "El navegador bloqueó la ventana de permisos. Permite ventanas emergentes e inténtalo de nuevo.";
+    return "No se pudo guardar: "+m+". "+(tail||"");
+  }
+  function writePlan(t,st){
+    return wbBase(t,st.pf.url).then(function(base){
+      return readSheet(t,base,PLAN_SHEET).then(function(sh){
+        if(!sh) throw new Error("El padrón no tiene la hoja «"+PLAN_SHEET+"».");
+        var pl=parsePlan(sh,+st.pf.mes.slice(0,4)), blk=pl.blocks.filter(function(b){ return b.monday===st.wk; })[0], ops=[];
+        if(!blk){
+          var ref=pl.blocks[pl.blocks.length-1]; if(!ref) throw new Error("La hoja no tiene el formato esperado (columnas ASIGNADO, LUNES…SABADO).");
+          var c=ref.cols, all=[c.asig].concat(c.days,c.zona!=null?[c.zona]:[],c.com!=null?[c.com]:[]), cmin=Math.min.apply(null,all), cmax=Math.max.apply(null,all), w=cmax-cmin+1;
+          var r=pl.lastRow+2, M=new Date(st.wk+"T00:00:00");
+          var dateRow=[]; for(var x=0;x<w;x++) dateRow.push(""); c.days.forEach(function(cj,di){ var d=addDays(M,di); dateRow[cj-cmin]=d.getDate()+"-"+MON_ES[d.getMonth()]; });
+          var head=ref.head.slice(cmin,cmax+1).map(function(v){ return clean(v); });
+          var sups=st.sups.map(function(s){ var a=[]; for(var x=0;x<w;x++) a.push(""); if(c.zona!=null) a[c.zona-cmin]=s.zona; a[c.asig-cmin]=s.asig; c.days.forEach(function(cj,di){ a[cj-cmin]=s.vals[di]; }); if(c.com!=null) a[c.com-cmin]=s.com; return a; });
+          var c0=sh.c0+cmin, c1=sh.c0+cmax;
+          ops.push(patchRange(t,base,PLAN_SHEET,colL(c0)+r+":"+colL(c1)+r,[dateRow]));
+          ops.push(patchRange(t,base,PLAN_SHEET,colL(c0)+(r+1)+":"+colL(c1)+(r+1),[head]));
+          ops.push(patchRange(t,base,PLAN_SHEET,colL(c0)+(r+2)+":"+colL(c1)+(r+1+sups.length),sups));
+        } else {
+          var orig=JSON.parse(st.orig);
+          st.sups.forEach(function(s,si){
+            var br=blk.rows.filter(function(x){ return norm(x.asig)===norm(s.asig); })[0]; if(!br) return;
+            var o=orig[si]||{vals:[],com:""};
+            s.vals.forEach(function(v,di){ if(v!==(o.vals[di]||"")) ops.push(patchRange(t,base,PLAN_SHEET,colL(sh.c0+blk.cols.days[di])+br.row,[[v]])); });
+            if(blk.cols.com!=null && s.com!==(o.com||"")) ops.push(patchRange(t,base,PLAN_SHEET,colL(sh.c0+blk.cols.com)+br.row,[[s.com]]));
+          });
+        }
+        return Promise.all(ops);
+      });
+    });
+  }
+
+  /* — Incidencias: «no salió», cambio de día/ruta — */
+  var incCtx=null;
+  function incKey(promotor,fecha){ return promotor+"|"+fecha; }
+  function incStatus(m,c){ var s=$("incStatus"); s.textContent=m||""; s.className="status-line"+(c?" "+c:""); }
+  function openInc(promotor,fecha){
+    var cur=INC_ALL[incKey(promotor,fecha)]||null, d=new Date(fecha+"T00:00:00");
+    incCtx={promotor:promotor,fecha:fecha};
+    $("modalTitle").textContent="Incidencia · "+promotor; $("modalSub").textContent=DIAS_T[(d.getDay()+6)%7]+" "+fecha.slice(8)+"/"+fecha.slice(5,7);
+    $("modalDown").hidden=true;
+    $("modalBody").innerHTML='<div class="inc-form"><div><label for="incTipo">Qué pasó</label><select id="incTipo">'+INC_TIPOS.map(function(t){ return '<option'+(cur&&cur.tipo===t?' selected':'')+'>'+t+'</option>'; }).join("")+'</select></div>'+
+      '<div><label for="incMot">Motivo</label><input id="incMot" list="dlIncMot" value="'+esc(cur?cur.motivo:"")+'" placeholder="Ej.: descanso médico, cambió la ruta al martes…"><datalist id="dlIncMot">'+INC_MOTIVOS.map(function(x){ return '<option value="'+esc(x)+'">'; }).join("")+'</datalist></div>'+
+      '<div class="status-line" id="incFormMsg"></div>'+
+      '<div class="modal-actions"><button class="btn" type="button" id="incSave">Guardar incidencia</button>'+(cur?'<button class="btn ghost" type="button" id="incDel">Quitar incidencia</button>':'')+'<button class="btn ghost" type="button" id="incCancel">Cancelar</button></div></div>';
+    $("modal").hidden=false; placeModal(); setTimeout(function(){ try{ $("incMot").focus(); }catch(e){} },30);
+  }
+  function incFormMsg(m,c){ var s=$("incFormMsg"); if(s){ s.textContent=m||""; s.className="status-line"+(c?" "+c:""); } }
+  document.addEventListener("click",function(e){
+    var b=e.target.closest("button.incbtn"); if(b){ openInc(b.getAttribute("data-p"),b.getAttribute("data-f")); return; }
+    if(e.target.id==="incCancel"){ closeModal(); return; }
+    if(e.target.id==="incSave"){
+      var mot=clean($("incMot").value); if(!mot){ incFormMsg("Escribe el motivo.","err"); return; }
+      submitInc({promotor:incCtx.promotor,fecha:incCtx.fecha,tipo:$("incTipo").value,motivo:mot,por:userName(),el:new Date().toISOString()},false); return;
+    }
+    if(e.target.id==="incDel"){ submitInc({promotor:incCtx.promotor,fecha:incCtx.fecha,tipo:"",motivo:"",por:userName(),el:new Date().toISOString()},true); return; }
+    var sy=e.target.closest("button[data-incsync]"); if(sy) syncPending();
+  });
+  function submitInc(inc,del){
+    var k=incKey(inc.promotor,inc.fecha); incFormMsg("Guardando en SharePoint…","");
+    INC_PEND[k]=Object.assign({del:!!del},inc); persistInc(); recalcInc();
+    getWriteToken().then(function(t){ return writeInc(t,inc,del); }).then(function(){
+      delete INC_PEND[k]; persistInc();
+      var pf=padFile(new Date(inc.fecha+"T00:00:00")); INCF[pf.url]=INCF[pf.url]||{};
+      if(del) delete INCF[pf.url][k]; else INCF[pf.url][k]={promotor:inc.promotor,fecha:inc.fecha,tipo:inc.tipo,motivo:inc.motivo,por:inc.por,el:inc.el};
+      recalcInc(); closeModal(); incStatus("✓ Incidencia "+(del?"quitada":"guardada")+" en la hoja «"+INC_SHEET+"».","ok"); render();
+    }).catch(function(e){
+      closeModal(); render();
+      incStatus("⚠ "+writeError(e,"")+" La incidencia quedó guardada en este navegador como pendiente; usa «Sincronizar pendientes».","err");
+    });
+  }
+  function writeInc(t,inc,del){
+    var pf=padFile(new Date(inc.fecha+"T00:00:00")), k=incKey(inc.promotor,inc.fecha);
+    return wbBase(t,pf.url).then(function(base){
+      return readSheet(t,base,INC_SHEET).then(function(sh){
+        var pre=Promise.resolve(sh);
+        if(!sh){ pre=gsend(t,"POST",base+"/worksheets/add",{name:INC_SHEET}).then(function(){
+          return patchRange(t,base,INC_SHEET,"A1:G1",[INC_COLS]); }).then(function(){ return {c0:1,r0:1,values:[INC_COLS],text:[INC_COLS]}; }); }
+        return pre.then(function(s2){
+          var row=null; for(var i=1;i<s2.values.length;i++){ if(clean(s2.values[i][0])===k){ row=s2.r0+i; break; } }
+          var cA=colL(s2.c0), cG=colL(s2.c0+6);
+          if(del){ if(row) return patchRange(t,base,INC_SHEET,cA+row+":"+cG+row,[["","","","","","",""]]); return null; }
+          if(!row) row=s2.r0+s2.values.length;
+          return patchRange(t,base,INC_SHEET,cA+row+":"+cG+row,[[k,inc.fecha,inc.promotor,inc.tipo,inc.motivo,inc.por,inc.el]]);
+        });
+      });
+    });
+  }
+  function syncPending(){
+    var ks=Object.keys(INC_PEND); if(!ks.length) return; incStatus("Sincronizando "+ks.length+" pendiente(s)…","");
+    getWriteToken().then(function(t){
+      return ks.reduce(function(p,k){ return p.then(function(){ var x=INC_PEND[k]; return writeInc(t,x,x.del).then(function(){ delete INC_PEND[k]; persistInc(); }); }); },Promise.resolve())
+        .then(function(){ return loadExtras(t); });
+    }).then(function(){ recalcInc(); incStatus("✓ Pendientes sincronizados.","ok"); render(); })
+      .catch(function(e){ incStatus("⚠ "+writeError(e,""),"err"); });
+  }
+  function incPH(p){ var i=INC_ALL[incKey(p.promotor,ymd(p.fecha))]; return i? "Incidencia del promotor: "+i.tipo+" — "+i.motivo : "Escribir motivo…"; }
+  function renderInc(rg){
+    var d1=ymd(rg.d1), d2=ymd(rg.d2);
+    var items=Object.keys(INC_ALL).map(function(k){ return Object.assign({k:k},INC_ALL[k]); }).filter(function(x){ return x.fecha>=d1 && x.fecha<=d2; })
+      .sort(function(a,b){ return a.fecha.localeCompare(b.fecha)||a.promotor.localeCompare(b.promotor); });
+    var np=Object.keys(INC_PEND).length;
+    $("tblInc").innerHTML=(np?'<div class="alerta"><span>⏳ '+np+' incidencia(s) pendiente(s) de subir al Excel.</span><button type="button" data-incsync="1">Sincronizar pendientes</button></div>':'')+
+      (!items.length? '<div class="empty">Sin incidencias registradas en este rango.</div>' :
+      '<table><thead><tr><th>Fecha</th><th>Promotor</th><th>Qué pasó</th><th>Motivo</th><th>Registró</th></tr></thead><tbody>'+
+      items.map(function(x){ return '<tr><td class="mono">'+esc(x.fecha)+'</td><td>'+esc(x.promotor)+'</td><td><span class="pill '+(x.tipo==="No salió"?"crit":"warn")+'">'+esc(x.tipo)+'</span>'+(x.pend?' <span class="pill pend">pendiente</span>':'')+'</td><td>'+esc(x.motivo)+'</td><td style="font-size:12px;color:var(--text-muted)">'+esc(x.por||"")+'</td></tr>'; }).join("")+'</tbody></table>');
+  }
+
   /* ───────── ventana emergente con el detalle de tiendas + Excel ───────── */
   var ESTADO_TXT={mismo:"Cubierta (mismo día)",otro:"Cubierta (otro día)",nocub:"No cubierta",pend:"Pendiente"};
   var PICK={
@@ -694,6 +980,7 @@ window.COB_REF_Q1 = "2026-10-26";
   function openDetalle(key, promotor){
     var items=lastProg.filter(PICK[key]).filter(function(p){ return !promotor || p.promotor===promotor; })
       .sort(function(a,b){ return a.fecha-b.fecha || a.promotor.localeCompare(b.promotor) || (a.r.estacion||"").localeCompare(b.r.estacion||""); });
+    $("modalDown").hidden=false;
     modalItems=items; modalName="cobertura-"+key+(promotor?"-"+promotor.replace(/\s+/g,"_"):"");
     $("modalTitle").textContent=PICK_TXT[key]+(promotor?" · "+promotor:"");
     $("modalSub").textContent=items.length+" tienda(s)"+(key==="otro"?" · «Otro día» = la tienda sí se visitó en el rango, pero no el día que le tocaba":"")+(key==="v"?" · vencidas = cubiertas + no cubiertas":"");
@@ -798,15 +1085,18 @@ window.COB_REF_Q1 = "2026-10-26";
     return '<table class="cal"><thead><tr><th>Promotor</th>'+DIAS_T.map(function(d,i){ return '<th>'+d+' '+ymd(addDays(monday,i)).slice(8)+'</th>'; }).join("")+'<th class="num">Total</th></tr></thead><tbody>'+
       ks.map(function(k){
         var tot=0;
-        var cells=by[k].map(function(arr){
-          if(!arr.length) return '<td class="cell"></td>';
+        var cells=by[k].map(function(arr,di){
+          var fch=ymd(addDays(monday,di)), inc=INC_ALL[incKey(k,fch)];
+          var tag=inc? '<span class="inc-tag" title="'+esc(inc.tipo+": "+inc.motivo)+'">⚑ '+esc(inc.tipo)+' · '+esc(inc.motivo)+(inc.pend?' (pendiente)':'')+'</span>' : '';
+          if(!arr.length) return '<td class="cell">'+tag+'</td>';
           tot+=arr.length;
+          var btn='<button type="button" class="incbtn" data-p="'+esc(k)+'" data-f="'+fch+'">'+(inc?'✎ Editar incidencia':'⚑ Incidencia')+'</button>';
           var c=arr.filter(function(p){return p.estado==="mismo"||p.estado==="otro";}).length,
               pe=arr.filter(function(p){return p.estado==="pend";}).length;
           var cls = pe===arr.length ? "st-pend" : c===arr.length-pe ? (c? "st-ok":"st-pend") : c===0 ? "st-bad" : "st-mix";
           var ds={}; arr.forEach(function(p){ var d=p.r.distrito||"—"; ds[d]=(ds[d]||0)+1; });
           var dl=Object.keys(ds).sort(function(a,b){return ds[b]-ds[a];}).map(function(d){ return esc(d)+(ds[d]>1?" ("+ds[d]+")":""); }).join(", ");
-          return '<td class="cell '+cls+'"><div class="cnt mono">'+arr.length+'<span style="font-weight:500;font-size:11px;color:var(--text-muted)"> tiendas</span></div><div class="dst">'+dl+'</div></td>';
+          return '<td class="cell '+cls+'"><div class="cnt mono">'+arr.length+'<span style="font-weight:500;font-size:11px;color:var(--text-muted)"> tiendas</span></div><div class="dst">'+dl+'</div>'+tag+btn+'</td>';
         }).join("");
         return '<tr><td><b>'+esc(k)+'</b></td>'+cells+'<td class="num mono">'+tot+'</td></tr>';
       }).join("")+'</tbody></table>';
@@ -932,7 +1222,7 @@ window.COB_REF_Q1 = "2026-10-26";
       busy=true;
       msToken(false).then(function(t){ return fetchBook(t,MS.infoUrl,"Consulta1",MOD.info,"info").then(function(wb){
           if(wb) applyWb(wb,"info"); else { CHK=new Date(); showMod(); }   // sin cambios en SharePoint: no se vuelve a descargar
-          return loadMotivosRemote(t); }); })
+          loadExtras(t).catch(function(){}); return loadMotivosRemote(t); }); })
         .catch(function(){}).finally(function(){ busy=false; });
     }, 10*60*1000);
   }
@@ -962,7 +1252,7 @@ window.COB_REF_Q1 = "2026-10-26";
         : fetchBook(token,MS.padUrl).then(function(wb){ return applyWb(wb,"pad"); });
       return padP.then(function(ok){ if(!ok) return; $("msRefreshBtn").hidden=false; startAuto();
         setStatus($("statusLine").textContent+" · procesando Información General…","ok");
-        return infoP.then(function(wb2){ var base=$("statusLine").textContent; if(applyWb(wb2,"info")) setStatus(base+" · "+$("statusLine").textContent.replace("✓ ",""),"ok"); loadMotivosRemote(token); })
+        return infoP.then(function(wb2){ var base=$("statusLine").textContent; if(applyWb(wb2,"info")) setStatus(base+" · "+$("statusLine").textContent.replace("✓ ",""),"ok"); loadMotivosRemote(token); loadExtras(token); })
           .catch(function(e){ setStatus($("statusLine").textContent+" · Información General no disponible ("+((e&&e.message)||"error")+"): cárgala manualmente.","ok"); }); });
     }).catch(function(e){ msError(e,silent); }).finally(function(){ busy=false; });
   }
@@ -978,7 +1268,7 @@ window.COB_REF_Q1 = "2026-10-26";
     $("msConnectBtn").addEventListener("click",function(){ loadLive(false); });
     $("msRefreshBtn").addEventListener("click",function(){ loadLive(false); });
   }
-  window.__cob={applyWb:applyWb, fetchBook:fetchBook, setPads:function(s){ PADS=s; PAD=s[s.length-1].data; updateNames(); show(); showMod(); }, setWriteToken:function(f){ getWriteToken=f; }, setTarget:function(u){ MS.infoUrl=MS.infoUrl||"x"; motTarget=u; }, state:function(){ return {MOT:MOT,DIRTY:DIRTY}; }};   // gancho para verificación local
+  window.__cob={applyWb:applyWb, fetchBook:fetchBook, setPads:function(s){ PADS=s; PAD=s[s.length-1].data; updateNames(); show(); showMod(); }, setWriteToken:function(f){ getWriteToken=f; }, setTarget:function(u){ MS.infoUrl=MS.infoUrl||"x"; motTarget=u; }, state:function(){ return {MOT:MOT,DIRTY:DIRTY,INC:INC_ALL,PLANF:PLANF,PLANUI:PLANUI}; }, setPlanFiles:function(o){ Object.keys(o).forEach(function(u){ PLANF[u]=o[u]; }); }, parsePlan:parsePlan, loadExtras:loadExtras, setView:function(v){ view=v; render(); }};   // gancho para verificación local
   initMs();
 
   function reportHeight(){
