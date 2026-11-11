@@ -128,6 +128,8 @@ footer{font-size:12px; color:var(--text-muted); border-top:1px solid var(--borde
       <input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls">
       <label class="btn ghost" for="infoInput">📂 Cargar Información General</label>
       <input type="file" id="infoInput" accept=".xlsx,.xlsm,.xls">
+      <label class="btn ghost" for="scopeInput">📂 Cargar SCOPES_MATERIALES.xlsx</label>
+      <input type="file" id="scopeInput" accept=".xlsx,.xlsm,.xls">
     </div>
     <div class="file-name" id="fileName">Sin archivo cargado</div>
     <div class="file-name" id="modLine" title="Hora de la última modificación de cada archivo en SharePoint (o en tu equipo si lo cargaste a mano)"></div>
@@ -167,6 +169,19 @@ footer{font-size:12px; color:var(--text-muted); border-top:1px solid var(--borde
     <p class="sub">Se cuentan <b>tiendas</b>. El <b>avance</b> compara las tiendas con el material puesto contra el <b>universo</b>: por defecto, las tiendas distintas del archivo (según cadena y zona filtradas); para un material que solo aplica a algunas tiendas, fija su <code>meta</code> en <code>config/materiales.json</code>. La <b>efectividad</b> solo mira las tiendas ya visitadas con ese material. El gris son las tiendas pendientes. Los chips indican el tipo de implementación.</p>
     <div class="pie-grid" id="pies"></div>
     <div class="table-wrap" id="tblAvance" hidden></div>
+  </section>
+
+  <section class="block" id="scopeSection" hidden>
+    <h2>Tiendas en scope sin implementar <span class="chip" id="scopeCount"></span></h2>
+    <p class="sub">Cruza el <b>scope del mes</b> (archivo SCOPES_MATERIALES: qué tienda debería tener cada material) contra lo registrado en Ejecución POP. Incluye tiendas que nunca se visitaron para ese material, no solo las que se visitaron y quedaron en 0. Elige un mes específico arriba (no "Todo el periodo") para ver esta comparación.</p>
+    <p class="sub" id="scopeNote" style="display:none"></p>
+    <div class="filter-bar" style="margin-bottom:10px">
+      <div class="filter-field"><label for="spEstado">Estado</label>
+        <select id="spEstado"><option value="">Nunca visitada + visitada sin implementar</option><option value="nunca">Nunca visitada</option><option value="visitada">Visitada sin implementar</option></select></div>
+      <div class="filter-field"><label for="spBuscar">Buscar</label><input type="search" id="spBuscar" placeholder="Tienda, código, promotor…" style="min-width:240px"></div>
+      <button class="btn ghost" id="spDown" type="button">⬇ Descargar Excel</button>
+    </div>
+    <div class="table-wrap" id="tblScopePend"></div>
   </section>
 
   <section class="block two-col">
@@ -260,6 +275,8 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
   var CFG = { meses:{} };
   var DATA = null;        // { mats:{id:{id,name}}, recs:[...], visitas:n }
   var INFO = null;        // { recs:[{fecha,tienda,cadena,zona,promotor,motivo}] }
+  var SCOPE = null;       // { rows:[{mes,hoja,scopeName,ejecName,cadena,codigo,estacion,distrito,zona,frecuencia,diaVisita,promotor,observacion}], noFigura:{} }
+  var lastScopeMissing = [], lastScopeNoTrack = {}, lastScopeMesKey = "";
   var charts = [];
   var sel = { mat:null, cad:null };   // Set o null = todos
 
@@ -426,6 +443,69 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
     return { recs:recs, fotos:fotosV };
   }
 
+  /* ───────── lectura: SCOPES_MATERIALES (qué tienda debería tener cada material, por mes) ─────────
+     Formato: hoja "RESUMEN" (MES, MATERIAL, MATERIAL EJECUCIÓN POP, …) que traduce el nombre del scope
+     al nombre real en 582-EJECUCIÓN-POP (o dice "No figura en Ejecución POP" cuando no se puede trackear
+     ahí), y una hoja por periodo (su nombre = el mes o periodo, p.ej. "NOVIEMBRE", "JULIO-AGOSTO") con el
+     detalle tienda × material: MATERIAL, KACC, CODIGO TT, ESTACION, DISTRITO, PROVINCIA, LIMA/KC/NKC,
+     PARETO, FRECUENCIA, DIA VISITA, PROMOTOR, OBSERVACION. El id real (para cruzar contra Ejecución POP)
+     se resuelve en caliente por nombre (ejecIdByName), no aquí: así no importa el orden en que se cargan
+     los dos archivos. */
+  function mesKeyFromSheetName(name){
+    var n = norm(name).split(/[^a-z]+/)[0];   // "JULIO-AGOSTO" → solo "julio" (primer mes del periodo combinado)
+    if(n==="setiembre") n="septiembre";   // variante peruana común
+    var idx = -1;
+    for(var i=0;i<MESES.length;i++){ if(norm(MESES[i])===n){ idx=i; break; } }
+    if(idx===-1) return null;
+    if(/-/.test(name)) return null;   // periodo combinado (ej. JULIO-AGOSTO): no corresponde a un solo mes calendario
+    var now = new Date(), y = now.getFullYear();
+    if(idx > now.getMonth()) y -= 1;   // el mes del scope es futuro respecto a hoy → debe ser del año anterior
+    return y+"-"+pad(idx+1);
+  }
+  function parseScope(wb){
+    if(wb.SheetNames.indexOf("RESUMEN")===-1) return {error:"No encontré la hoja RESUMEN. ¿Es el archivo SCOPES_MATERIALES?"};
+    var rRows = XLSX.utils.sheet_to_json(wb.Sheets["RESUMEN"],{header:1,defval:"",raw:true,blankrows:false});
+    var rMap = {};
+    for(var i=1;i<rRows.length;i++){
+      var rr=rRows[i]; if(!rr[0]||!rr[1]) continue;
+      rMap[norm(rr[0])+"|"+norm(rr[1])] = clean(rr[2]);
+    }
+    var rows = [], sheetsUsed = 0;
+    wb.SheetNames.forEach(function(sn){
+      if(sn==="RESUMEN") return;
+      var head = headerRow(wb.Sheets[sn]).map(String);
+      var idx = {}; head.forEach(function(h,i){ if(!(h in idx)) idx[h]=i; });
+      if(idx["MATERIAL"]===undefined || idx["CODIGO TT"]===undefined) return;   // no es una hoja de scope mensual
+      sheetsUsed++;
+      var mkey = mesKeyFromSheetName(sn);
+      var body = XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:"",raw:true,blankrows:false});
+      for(var r=1;r<body.length;r++){
+        var row = body[r], scopeName = clean(row[idx["MATERIAL"]]); if(!scopeName) continue;
+        var codigo = clean(row[idx["CODIGO TT"]]); if(!codigo) continue;
+        var ejecName = rMap[norm(sn)+"|"+norm(scopeName)] || "";
+        rows.push({
+          mes: mkey, hoja: sn, scopeName: scopeName, ejecName: ejecName,
+          noTrackeable: /no figura/i.test(ejecName),
+          cadena: clean(row[idx["KACC"]]), codigo: codigo, estacion: clean(row[idx["ESTACION"]]),
+          distrito: clean(row[idx["DISTRITO"]]), provincia: clean(row[idx["PROVINCIA"]]),
+          zona: (clean(row[idx["LIMA/KC/NKC"]])||"").toUpperCase(),
+          frecuencia: clean(row[idx["FRECUENCIA"]]), diaVisita: clean(row[idx["DIA VISITA"]]),
+          promotor: clean(row[idx["PROMOTOR"]]), observacion: clean(row[idx["OBSERVACION"]])
+        });
+      }
+    });
+    if(!sheetsUsed) return {error:"No encontré ninguna hoja mensual de scope (con columnas MATERIAL / CODIGO TT)."};
+    return { rows: rows };
+  }
+  // Resuelve el id real de Ejecución POP para un nombre de material del scope, comparando por texto normalizado
+  // (se recalcula al vuelo, no se guarda, para no depender de qué archivo se cargó primero).
+  function ejecIdByName(ejecName){
+    if(!DATA || !ejecName) return null;
+    var n = norm(ejecName);
+    for(var mid in DATA.mats){ if(DATA.mats.hasOwnProperty(mid) && norm(DATA.mats[mid].name)===n) return +mid; }
+    return null;
+  }
+
   /* ───────── filtros ───────── */
   function msBuild(host, label, onChange){
     host.innerHTML = '<button type="button" class="ms-btn"><span class="ms-txt"></span><span class="caret">▾</span></button><div class="ms-panel" hidden></div>';
@@ -581,6 +661,40 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
       casos.slice(0,MAXC).map(function(r){ var f=visitFotos(r);
         return '<tr><td class="mono">'+ymd(r.fecha)+'</td><td>'+esc(r.tienda||r.store)+'</td><td>'+esc(matLabel(r.mat))+'</td><td>'+esc(r.promotor)+'</td><td>'+(f.length?fotosHtml(f):'<span class="pill crit">Sin ninguna foto</span>')+'</td></tr>'; }).join("")+'</tbody></table>';
   }
+  /* ───────── tiendas en scope sin implementar (cruce scope vs ejecutado) ───────── */
+  function spRows(){
+    var est=$("spEstado").value, q=norm($("spBuscar").value);
+    return lastScopeMissing.filter(function(r){
+      if(est==="nunca" && r.estado!=="nunca") return false;
+      if(est==="visitada" && r.estado!=="visitada") return false;
+      if(q && norm([r.codigo,r.estacion,r.promotor,r.cadena,r.distrito].join(" ")).indexOf(q)===-1) return false;
+      return true;
+    }).sort(function(a,b){ return matLabel(a.id).localeCompare(matLabel(b.id)) || a.estacion.localeCompare(b.estacion); });
+  }
+  function renderScopePend(scopeNoTrack, mesKey){
+    var section = $("scopeSection"), note = $("scopeNote");
+    if(!SCOPE){ section.hidden=true; return; }
+    section.hidden=false;
+    if(!mesKey){
+      $("scopeCount").textContent = "";
+      $("tblScopePend").innerHTML = '<div class="empty">Elige un mes específico arriba (no "Todo el periodo") para comparar el scope contra lo ejecutado.</div>';
+      note.style.display="none";
+      reportHeight(); return;
+    }
+    var noTrackKeys = Object.keys(scopeNoTrack||{});
+    if(noTrackKeys.length){
+      note.style.display=""; note.textContent = "⚠ "+noTrackKeys.length+" material(es) del scope de "+mesLabel(mesKey)+" no están en Ejecución POP y no se pueden comparar aquí: "+noTrackKeys.join(", ")+".";
+    } else note.style.display="none";
+    var rows = spRows();
+    $("scopeCount").textContent = rows.length.toLocaleString("es-PE");
+    $("tblScopePend").innerHTML = !rows.length ? '<div class="empty">Sin tiendas pendientes de scope con los filtros actuales (o aún no cargaste el archivo SCOPES_MATERIALES).</div>' :
+      '<table><thead><tr><th>Material</th><th>Cadena</th><th>Código</th><th>Estación</th><th>Distrito</th><th>Promotor</th><th>Estado</th><th>Motivo (si fue visitada)</th></tr></thead><tbody>'+
+      rows.map(function(r){
+        var st = r.estado==="nunca" ? '<span class="pill crit">Nunca visitada</span>' : '<span class="pill warn">Visitada sin implementar</span>';
+        return '<tr><td>'+esc(matLabel(r.id))+'</td><td>'+esc(r.cadena)+'</td><td class="mono">'+esc(r.codigo)+'</td><td>'+esc(r.estacion)+'</td><td>'+esc(r.distrito)+'</td><td>'+esc(r.promotor)+'</td><td>'+st+'</td><td>'+esc(r.motivo||"—")+'</td></tr>';
+      }).join("")+'</tbody></table>';
+    reportHeight();
+  }
   function applyView(){
     $("pies").hidden = view!=="graf";
     $("tblAvance").hidden = view!=="tabla";
@@ -628,6 +742,7 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
       var m = byMat[r.mat] || (byMat[r.mat] = {id:r.mat, stores:{}, tipos:{}, fok:0, fno:0});
       var s = m.stores[r.store] || (m.stores[r.store] = {impl:false});
       if(r.impl===1){ s.impl=true; var t=r.tipo||"Sin tipo"; m.tipos[t]=(m.tipos[t]||0)+1; if(r.foto) m.fok++; else m.fno++; }
+      else if(r.impl===0 && r.com) s.com = r.com;
     });
     var mesKey = $("fMes").value, cfgMes = CFG.meses && CFG.meses[mesKey];
     var metaOf = {}; if(cfgMes && cfgMes.materiales) cfgMes.materiales.forEach(function(m){ if(m.meta) metaOf[+m.id]=+m.meta; });
@@ -637,10 +752,33 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
     var zonaSel = $("fZona").value, uniSet = {};
     DATA.recs.forEach(function(r){ if(zonaSel && r.zona!==zonaSel) return; if(sel.cad && !sel.cad.has(r.cadena)) return; uniSet[r.store]=1; });
     var universo = Object.keys(uniSet).length, filtrado = !!(zonaSel || sel.cad);
+
+    // Scope del mes elegido (archivo SCOPES_MATERIALES), filtrado por cadena/zona igual que el resto de la vista.
+    // Si hay scope para un material, manda sobre la meta de config.json y sobre el universo estimado (es el
+    // target real tienda por tienda, no un conteo global), y permite listar exactamente qué tiendas faltan.
+    var scopeByMat = {}, scopeMissing = [], scopeNoTrack = {};
+    if(SCOPE && mesKey){
+      SCOPE.rows.forEach(function(r){
+        if(r.mes!==mesKey) return;
+        if(r.noTrackeable){ scopeNoTrack[r.scopeName]=(scopeNoTrack[r.scopeName]||0)+1; return; }
+        if(zonaSel && r.zona!==zonaSel) return;
+        if(sel.cad && !sel.cad.has(r.cadena)) return;
+        var id = ejecIdByName(r.ejecName); if(!id) return;
+        (scopeByMat[id] = scopeByMat[id] || []).push(r);
+      });
+    }
     var list = Object.keys(byMat).map(function(k){
       var m=byMat[k], st=Object.keys(m.stores), ok=st.filter(function(s){return m.stores[s].impl;}).length;
+      var scopeRows = scopeByMat[m.id];
       var cfgMeta = (!filtrado && metaOf[m.id]) ? metaOf[m.id] : 0;
-      return {id:m.id, total:st.length, ok:ok, no:st.length-ok, tipos:m.tipos, meta:cfgMeta||universo, metaEst:!cfgMeta, fok:m.fok||0, fno:m.fno||0};
+      var meta = scopeRows ? scopeRows.length : (cfgMeta||universo);
+      var metaSrc = scopeRows ? "scope" : (cfgMeta ? "meta" : "universo");
+      if(scopeRows) scopeRows.forEach(function(r){
+        var s = m.stores[r.codigo];
+        if(s && s.impl) return;   // ya implementado: no es pendiente
+        scopeMissing.push(Object.assign({}, r, { id:m.id, estado: s?"visitada":"nunca", motivo: (s&&s.com)||"" }));
+      });
+      return {id:m.id, total:st.length, ok:ok, no:st.length-ok, tipos:m.tipos, meta:meta, metaEst:metaSrc!=="meta", metaSrc:metaSrc, fok:m.fok||0, fno:m.fno||0};
     }).sort(function(a,b){ return b.total-a.total || matLabel(a.id).localeCompare(matLabel(b.id)); });
 
     var storesAll = {}, vis = {}, pairs=0, pairsOk=0;
@@ -661,7 +799,8 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
       host.innerHTML = list.map(function(m,i){
         var tipos = Object.keys(m.tipos).map(function(t){ return '<span class="chip">'+esc(t)+': '+m.tipos[t]+'</span>'; }).join("");
         var pend = m.meta ? Math.max(0, m.meta-m.total) : 0;
-        return '<div class="pie-card"><h3>'+esc(matLabel(m.id))+'<small>Avance '+pct(m.ok,m.meta).toFixed(1)+'% · '+m.ok+' de '+m.meta+(m.metaEst?' tiendas (universo estimado)':' (meta)')+'<br>Efectividad en visitadas: '+(m.total? pct(m.ok,m.total).toFixed(1)+"%" : "—")+'</small></h3>'+
+        var metaTxt = m.metaSrc==="scope" ? " tiendas (scope del mes)" : (m.metaSrc==="meta" ? " (meta)" : " tiendas (universo estimado)");
+        return '<div class="pie-card"><h3>'+esc(matLabel(m.id))+'<small>Avance '+pct(m.ok,m.meta).toFixed(1)+'% · '+m.ok+' de '+m.meta+metaTxt+'<br>Efectividad en visitadas: '+(m.total? pct(m.ok,m.total).toFixed(1)+"%" : "—")+'</small></h3>'+
           '<div class="pie-wrap"><canvas id="pie'+i+'"></canvas></div>'+
           '<div class="legend-row"><span><i class="dot" style="background:var(--ok)"></i>Implementadas '+m.ok+'</span>'+
           '<span><i class="dot" style="background:var(--crit)"></i>No impl. '+m.no+'</span>'+
@@ -707,6 +846,9 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
     lastRecs = recs;
     renderDetalle();
     renderSinFoto();
+
+    lastScopeMissing = scopeMissing; lastScopeNoTrack = scopeNoTrack; lastScopeMesKey = mesKey;
+    renderScopePend(scopeNoTrack, mesKey);
 
     var scopeTxt = f.scope ? "Mostrando los "+f.scope.size+" materiales configurados para "+mesLabel(mesKey)+"." :
       (mesKey && $("fAlcance").value==="mes" ? "No hay materiales configurados para "+mesLabel(mesKey)+" en config/materiales.json: se muestran todos los que tienen registros." : "Mostrando todos los materiales.");
@@ -773,6 +915,18 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
   }
   $("fileInput").addEventListener("change", function(e){ if(e.target.files[0]) readFile(e.target.files[0],"pop"); e.target.value=""; });
   $("infoInput").addEventListener("change", function(e){ if(e.target.files[0]) readFile(e.target.files[0],"info"); e.target.value=""; });
+  $("scopeInput").addEventListener("change", function(e){
+    var file = e.target.files[0]; e.target.value=""; if(!file) return;
+    setStatus("Leyendo "+file.name+"…");
+    file.arrayBuffer().then(function(buf){
+      var wb = XLSX.read(buf,{type:"array",cellDates:true});
+      var s = parseScope(wb);
+      if(s.error){ setStatus("⚠ "+s.error,"err"); return; }
+      SCOPE = s;
+      setStatus("✓ Scope cargado: "+s.rows.length.toLocaleString("es-PE")+" filas tienda×material","ok");
+      if(DATA) render(); else renderScopePend({}, $("fMes").value);
+    }).catch(function(err){ setStatus("⚠ No se pudo leer el archivo: "+err.message,"err"); });
+  });
 
   /* ───────── SharePoint (Graph + MSAL) ───────── */
   var MS = window.MAT_MS || {}, msalApp=null, msBusy=false;
@@ -869,6 +1023,14 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
   ["dEstado","dFoto"].forEach(function(id){ $(id).addEventListener("change", renderDetalle); });
   $("dBuscar").addEventListener("input", renderDetalle);
   $("dDown").addEventListener("click", function(){ downloadRows(detRows(), "materiales-detalle.xlsx"); });
+  $("spEstado").addEventListener("change", function(){ renderScopePend(lastScopeNoTrack, lastScopeMesKey); });
+  $("spBuscar").addEventListener("input", function(){ renderScopePend(lastScopeNoTrack, lastScopeMesKey); });
+  $("spDown").addEventListener("click", function(){
+    var rows = spRows();
+    if(!rows.length){ setStatus("No hay filas para descargar con los filtros actuales.","err"); return; }
+    var data = rows.map(function(r){ return {MATERIAL:matLabel(r.id), CADENA:r.cadena, CODIGO_TT:r.codigo, ESTACION:r.estacion, DISTRITO:r.distrito, PROMOTOR:r.promotor, ESTADO: r.estado==="nunca"?"Nunca visitada":"Visitada sin implementar", MOTIVO:r.motivo||""}; });
+    var wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(data),"SCOPE PENDIENTE"); XLSX.writeFile(wb,"materiales-scope-pendiente.xlsx");
+  });
   $("sfDown").addEventListener("click", function(){
     downloadRows(lastRecs.filter(function(r){ return r.impl===1 && !r.foto; }).sort(function(a,b){ return b.fecha-a.fecha; }), "materiales-sin-foto.xlsx");
   });
@@ -883,7 +1045,7 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
     return fetch("config/materiales.json?v="+Date.now()).then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
       .then(function(j){ CFG = j || {meses:{}}; }).catch(function(){ CFG = {meses:{}}; });
   }
-  window.__mat = { applyWb:applyWb, fetchBook:fetchBook };   // gancho para verificación local
+  window.__mat = { applyWb:applyWb, fetchBook:fetchBook, parseScope:parseScope, getScope:function(){return SCOPE;}, getMissing:function(){return lastScopeMissing;} };   // gancho para verificación local
   loadCfg().then(initMs);
 
   function reportHeight(){

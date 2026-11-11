@@ -1,22 +1,35 @@
 {
-  "_ayuda": "Un bloque por mes (clave AAAA-MM). 'materiales' lista los ids de material (el número después de 'id:' en el nombre de columna del Excel 582-EJECUCIÓN-POP) que se miden ese mes. 'meta' (opcional) = tiendas objetivo del material; si se informa, el gráfico muestra la porción 'Pendiente'. Si 'materiales' está vacío, la vista muestra todos los materiales con registros ese mes. No se borran meses anteriores: así se conserva el histórico.",
+  "_ayuda": "Un bloque por mes (clave AAAA-MM). 'materiales' lista los ids de material (el número después de 'id:' en el nombre de columna del Excel 582-EJECUCIÓN-POP) que se miden ese mes. 'meta' = tiendas objetivo del material según SCOPES_MATERIALES (conteo de tiendas únicas en el scope de ese mes); si se informa, el gráfico muestra la porción 'Pendiente'. Si 'materiales' está vacío, la vista muestra todos los materiales con registros ese mes. No se borran meses anteriores: así se conserva el histórico. Fuente: SCOPES_MATERIALES_NOVIEMBRE.xlsx (hoja RESUMEN cruza el nombre de scope con el nombre real en Ejecución POP) + 582-EJECUCIÓN-POP.xlsx (ids reales), reconciliado 2026-11-11.",
+  "_nota_julio_agosto": "El periodo JULIO-AGOSTO del scope (7 materiales: VIBRIN VUSE AROMATIC, JALAVISTA MONITOR VUSE AROMATIC/SIN AROM, VIBRIN AROMATIC/SIN AROMATIC TOBACCO, FLAPS VUSE AROMATIC/SIN AROMATIC) no tiene ids en 582-EJECUCIÓN-POP (la hoja RESUMEN dice 'No figura en Ejecución POP, se registra en AF') → no se puede trackear aquí ni cruzar scope vs ejecutado para ese periodo.",
   "meses": {
     "2026-11": {
       "nombre": "Noviembre 2026",
       "materiales": [
-        { "id": 7929, "nombre": "TABLE TENT LS CORE NOVIEMBRE" },
-        { "id": 7930, "nombre": "STICKER MESON LS CORE NOVIEMBRE" },
-        { "id": 7931, "nombre": "VIBRIN LS CORE NOVIEMBRE" },
-        { "id": 7932, "nombre": "CARTILLA CONECTADOS LS CORE" }
+        { "id": 7929, "nombre": "TABLE TENT LS CORE NOVIEMBRE", "meta": 956 },
+        { "id": 7930, "nombre": "STICKER MESON LS CORE NOVIEMBRE", "meta": 69 },
+        { "id": 7931, "nombre": "VIBRIN LS CORE NOVIEMBRE", "meta": 333 },
+        { "id": 7933, "nombre": "HEADER MONITOR LS + CAFE (OXXO)", "meta": 40 },
+        { "id": 7934, "nombre": "TABLE TENT CAFE (OXXO)", "meta": 40 }
       ]
     },
     "2026-10": {
       "nombre": "Octubre 2026",
-      "materiales": []
+      "materiales": [
+        { "id": 7924, "nombre": "VIBRIN PALL MALL OCTUBRE", "meta": 59 },
+        { "id": 7925, "nombre": "HEADER MONITOR CROSS OXXO", "meta": 101 },
+        { "id": 7926, "nombre": "HEADER MONITOR VELO MELLOW OXXO", "meta": 116 },
+        { "id": 7927, "nombre": "CENEFA DE MESON VUSE 8K", "meta": 262 }
+      ]
     },
     "2026-09": {
       "nombre": "Septiembre 2026",
-      "materiales": []
+      "materiales": [
+        { "id": 7465, "nombre": "FLAP VELO Y VUSE", "meta": 164 },
+        { "id": 7912, "nombre": "Header Velo MELOW", "meta": 881 },
+        { "id": 7913, "nombre": "Sticker Mesón VELO MELOW", "meta": 163 },
+        { "id": 7915, "nombre": "Sticker de Frio VELO MELOW", "meta": 55 },
+        { "id": 7916, "nombre": "Jalavista Monitor Velo Mellow", "meta": 43 }
+      ]
     }
   }
 }

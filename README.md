@@ -6,7 +6,8 @@ Web independiente de promotoría (separada de BAT 360). Menú lateral: **Radar d
 - `index.html` — shell: login con Google + menú lateral + una vista por entrada (no se edita).
 - `site-config.js` — **aquí se cambia todo**: usuarios con acceso, vistas del menú y los links de SharePoint (`links`).
 - `radar.html`, `materiales.html`, `cobertura.html` — las vistas.
-- `config/materiales.json` — materiales de cada mes (se conserva el histórico).
+- `config/materiales.json` — materiales de cada mes (se conserva el histórico), con el id y la meta (tiendas objetivo) de cada uno.
+- `materiales.html` también puede cruzar el **scope del mes** (archivo `SCOPES_MATERIALES_*.xlsx`, carga manual por ahora — botón "Cargar SCOPES_MATERIALES.xlsx") contra lo ejecutado, para listar exactamente qué tiendas en scope no tienen el material (nunca visitadas o visitadas sin implementar). Requiere elegir un mes específico (no "Todo el periodo").
 
 ## Agregar una vista nueva
 1. Subir su página `.html` a esta carpeta.
