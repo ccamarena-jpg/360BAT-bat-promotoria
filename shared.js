@@ -229,15 +229,17 @@
   function parseVencFecha(s){
     // Texto libre: hay muchos typos (dígitos de más/de menos, guiones mal puestos, p.ej. "18-111-27" o "0785279").
     // Solo se acepta cuando calza EXACTO con un separador claro (2 o 4 dígitos de año, nunca 1 o 3) y el resultado
-    // es una fecha real y plausible (2024-2035); cualquier otra cosa se descarta como "no reconocida" en vez de
-    // adivinar — una fecha de vencimiento equivocada es peor que no tenerla.
+    // es una fecha real y plausible; cualquier otra cosa se descarta como "no reconocida" en vez de adivinar — una
+    // fecha de vencimiento equivocada es peor que no tenerla. Piso 2026 a pedido de la usuaria (2026-11-18): "solo
+    // la información del 2026 en adelante" — un vencimiento 2024/2025 reportado hoy no es información útil (ya
+    // venció hace rato, o es un typo de año) y antes colaba igual, inflando las tablas de vencimiento con ruido.
     s=B.clean(s); var m, d,mo,y;
     if((m=/^(\d{1,2})-(\d{1,2})-(\d{2}|\d{4})$/.exec(s))){ d=+m[1]; mo=+m[2]; y=+m[3]; }
     else if((m=/^(\d{2})(\d{2})(\d{2}|\d{4})$/.exec(s))){ d=+m[1]; mo=+m[2]; y=+m[3]; }
     else if((m=/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/.exec(s))){ d=+m[1]; mo=+m[2]; y=+m[3]; }
     else return null;
     if(String(m[3]).length===2) y+=2000;
-    if(mo<1||mo>12||d<1||d>31||y<2024||y>2035) return null;
+    if(mo<1||mo>12||d<1||d>31||y<2026||y>2035) return null;
     var dt=new Date(y,mo-1,d);
     if(dt.getMonth()!==mo-1) return null;   // ej. "31-04-2027" (abril no tiene 31)
     return dt;
