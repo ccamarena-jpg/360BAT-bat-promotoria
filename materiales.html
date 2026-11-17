@@ -320,7 +320,7 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
   var DATA = null;        // { mats:{id:{id,name}}, recs:[...], visitas:n }
   var INFO = null;        // { recs:[{fecha,tienda,cadena,zona,promotor,motivo}] }
   var lastFuera = [], lastAv = [], lastInfo = [], motItems = [], motName = "motivo";
-  var lastProm = [], lastCounted = [];
+  var lastProm = [], lastCounted = [], lastScopedIds = {};
   var ALERTA_MIN_VISITAS = 5, ALERTA_MIN_PCT = 30;   // umbral de la alerta: al menos N visitas con material y >=X% sin implementar
   var SCOPE = null;       // { rows:[{mes,hoja,scopeName,ejecName,cadena,codigo,estacion,distrito,zona,frecuencia,diaVisita,promotor,observacion}], noFigura:{} }
   var lastScopeMissing = [], lastScopeNoTrack = {}, lastScopeMesKey = "";
@@ -753,10 +753,10 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
     var rows = spRows();
     $("scopeCount").textContent = rows.length.toLocaleString("es-PE");
     $("tblScopePend").innerHTML = !rows.length ? '<div class="empty">Sin tiendas pendientes de scope con los filtros actuales (o aún no cargaste el archivo SCOPES_MATERIALES).</div>' :
-      '<table><thead><tr><th>Material</th><th>Cadena</th><th>Código</th><th>Estación</th><th>Distrito</th><th>Promotor</th><th>Estado</th><th>Motivo (si fue visitada)</th></tr></thead><tbody>'+
+      '<table><thead><tr><th>Material</th><th>Cadena</th><th>Código</th><th>Estación</th><th>Distrito</th><th>Frecuencia</th><th>Día visita</th><th>Promotor</th><th>Estado</th><th>Motivo (si fue visitada)</th></tr></thead><tbody>'+
       rows.map(function(r){
         var st = r.estado==="nunca" ? '<span class="pill crit">Nunca visitada</span>' : '<span class="pill warn">Visitada sin implementar</span>';
-        return '<tr><td>'+esc(matLabel(r.id))+'</td><td>'+esc(r.cadena)+'</td><td class="mono">'+esc(r.codigo)+'</td><td>'+esc(r.estacion)+'</td><td>'+esc(r.distrito)+'</td><td>'+esc(r.promotor)+'</td><td>'+st+'</td><td>'+esc(r.motivo||"—")+'</td></tr>';
+        return '<tr><td>'+esc(matLabel(r.id))+'</td><td>'+esc(r.cadena)+'</td><td class="mono">'+esc(r.codigo)+'</td><td>'+esc(r.estacion)+'</td><td>'+esc(r.distrito)+'</td><td>'+esc(r.frecuencia||"—")+'</td><td>'+esc(r.diaVisita||"—")+'</td><td>'+esc(r.promotor)+'</td><td>'+st+'</td><td>'+esc(r.motivo||"—")+'</td></tr>';
       }).join("")+'</tbody></table>';
     reportHeight();
   }
@@ -804,24 +804,30 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
   /* ventana con las tiendas de un motivo (no implementado / no cobertura) */
   function openMotivo(kind, motivo){
     var items, rows;
+    var showFD = kind==="prom";   // Frecuencia / Día visita / Estado: solo se conocen vía scope, se muestran en el detalle por promotor
     if(kind==="imp"){
       items = lastRecs.filter(function(r){ return r.impl===0 && categoria(r.com)===motivo; });
       rows = items.map(function(r){ return {FECHA:ymd(r.fecha), CADENA:r.cadena, CODIGO_TT:r.store, TIENDA:r.tienda, MATERIAL:matLabel(r.mat), PROMOTOR:r.promotor, MOTIVO:r.com||""}; });
     } else if(kind==="prom"){
-      items = lastCounted.filter(function(r){ return r.impl===0 && (r.promotor||"(sin promotor)")===motivo; });
-      rows = items.map(function(r){ return {FECHA:ymd(r.fecha), CADENA:r.cadena, CODIGO_TT:r.store, TIENDA:r.tienda, MATERIAL:matLabel(r.mat), PROMOTOR:r.promotor, MOTIVO:r.com||""}; });
+      // tiendas de materiales SIN scope: solo las visitadas y marcadas en 0 (no hay forma de saber "nunca visitada" sin scope)
+      var a = lastCounted.filter(function(r){ return r.impl===0 && !lastScopedIds[r.mat] && (r.promotor||"(sin promotor)")===motivo; })
+        .map(function(r){ return {FECHA:ymd(r.fecha), CADENA:r.cadena, CODIGO_TT:r.store, TIENDA:r.tienda, MATERIAL:matLabel(r.mat), PROMOTOR:r.promotor, FRECUENCIA:"", DIA_VISITA:"", ESTADO:"Visitada sin implementar", MOTIVO:r.com||""}; });
+      // tiendas de materiales CON scope: todo lo pendiente de ese promotor (nunca visitada + visitada sin implementar), con frecuencia y día de visita del scope
+      var b = lastScopeMissing.filter(function(r){ return (r.promotor||"(sin promotor)")===motivo; })
+        .map(function(r){ return {FECHA:"", CADENA:r.cadena, CODIGO_TT:r.codigo, TIENDA:r.estacion, MATERIAL:matLabel(r.id), PROMOTOR:r.promotor, FRECUENCIA:r.frecuencia||"", DIA_VISITA:r.diaVisita||"", ESTADO: r.estado==="nunca"?"Nunca visitada":"Visitada sin implementar", MOTIVO:r.motivo||""}; });
+      rows = a.concat(b);
     } else {
       items = lastInfo.filter(function(r){ return categoria(r.motivo)===motivo; });
       rows = items.map(function(r){ return {FECHA:ymd(r.fecha), CADENA:r.cadena, CODIGO_TT:r.store, TIENDA:r.tienda, PROMOTOR:r.promotor, MOTIVO:r.motivo||""}; });
     }
-    rows.sort(function(a,b){ return b.FECHA.localeCompare(a.FECHA) || a.TIENDA.localeCompare(b.TIENDA); });
+    rows.sort(function(a,b){ return (b.ESTADO||"").localeCompare(a.ESTADO||"") || (b.FECHA||"").localeCompare(a.FECHA||"") || (a.TIENDA||"").localeCompare(b.TIENDA||""); });
     motItems = rows; motName = "tiendas-"+(kind==="imp"?"no-implementado":kind==="prom"?"promotor":"no-cobertura")+"-"+norm(motivo).replace(/[^a-z0-9]+/g,"-");
     $("modalTitle").textContent = motivo;
     $("modalSub").textContent = rows.length+" "+(kind==="imp"||kind==="prom"?"registro(s) de tienda × material sin implementar":"visita(s) no efectiva(s)");
     var MAXM=400, mat = kind==="imp"||kind==="prom";
     $("modalBody").innerHTML = !rows.length ? '<div class="empty">Sin registros.</div>' :
-      '<table><thead><tr><th>Fecha</th><th>Cadena</th><th>Código</th><th>Tienda</th>'+(mat?'<th>Material</th>':'')+'<th>Promotor</th><th>Texto del motivo</th></tr></thead><tbody>'+
-      rows.slice(0,MAXM).map(function(r){ return '<tr><td class="mono">'+esc(r.FECHA)+'</td><td>'+esc(r.CADENA)+'</td><td class="mono">'+esc(r.CODIGO_TT)+'</td><td>'+esc(r.TIENDA)+'</td>'+(mat?'<td>'+esc(r.MATERIAL)+'</td>':'')+'<td>'+esc(r.PROMOTOR)+'</td><td>'+esc(r.MOTIVO||"—")+'</td></tr>'; }).join("")+'</tbody></table>'+
+      '<table><thead><tr>'+(showFD?'<th>Estado</th>':'<th>Fecha</th>')+'<th>Cadena</th><th>Código</th><th>Tienda</th>'+(mat?'<th>Material</th>':'')+(showFD?'<th>Frecuencia</th><th>Día visita</th>':'')+'<th>Promotor</th><th>Texto del motivo</th></tr></thead><tbody>'+
+      rows.slice(0,MAXM).map(function(r){ return '<tr><td class="'+(showFD?'':'mono')+'">'+esc(showFD?r.ESTADO:r.FECHA)+'</td><td>'+esc(r.CADENA)+'</td><td class="mono">'+esc(r.CODIGO_TT)+'</td><td>'+esc(r.TIENDA)+'</td>'+(mat?'<td>'+esc(r.MATERIAL)+'</td>':'')+(showFD?'<td>'+esc(r.FRECUENCIA||"—")+'</td><td>'+esc(r.DIA_VISITA||"—")+'</td>':'')+'<td>'+esc(r.PROMOTOR)+'</td><td>'+esc(r.MOTIVO||"—")+'</td></tr>'; }).join("")+'</tbody></table>'+
       (rows.length>MAXM?'<div class="empty">Se muestran '+MAXM+' de '+rows.length+'. El Excel baja todas.</div>':'');
     $("modal").hidden=false; placeModal();
   }
@@ -914,17 +920,17 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
       var s = m.stores[r.store] || (m.stores[r.store] = {impl:false});
       if(r.impl===1){ s.impl=true; var t=r.tipo||"Sin tipo"; m.tipos[t]=(m.tipos[t]||0)+1; if(r.foto) m.fok++; else m.fno++; }
       else if(r.impl===0 && r.com) s.com = r.com;
-      var prom = r.promotor || "(sin promotor)";
-      var p = byProm[prom] || (byProm[prom] = {promotor:prom, cadenas:{}, materiales:{}, visitas:0, ok:0, no:0});
-      p.visitas++; p.cadenas[r.cadena]=1; p.materiales[r.mat]=1; if(r.impl===1) p.ok++; else p.no++;
+      // Promotor: si el material tiene scope, el avance por promotor se arma más abajo desde el scope
+      // (así una tienda nunca visitada también cuenta como pendiente de SU promotor asignado, no solo
+      // las que sí se visitaron y quedaron en 0). Sin scope, se arma aquí desde quién registró la visita.
+      if(!scopeSet[r.mat]){
+        var prom = r.promotor || "(sin promotor)";
+        var p = byProm[prom] || (byProm[prom] = {promotor:prom, cadenas:{}, materiales:{}, visitas:0, ok:0, no:0});
+        p.visitas++; p.cadenas[r.cadena]=1; p.materiales[r.mat]=1; if(r.impl===1) p.ok++; else p.no++;
+      }
     });
     lastFuera = Object.keys(fuera).map(function(k){ return fuera[k]; });
     lastCounted = countedRecs;
-    lastProm = Object.keys(byProm).map(function(k){
-      var p=byProm[k];
-      return {promotor:p.promotor, cadenas:Object.keys(p.cadenas).sort().join(", "), materiales:Object.keys(p.materiales).length,
-        visitas:p.visitas, ok:p.ok, no:p.no, pctNo: p.visitas?Math.round(p.no*1000/p.visitas)/10:0};
-    }).sort(function(a,b){ return b.no-a.no || b.visitas-a.visitas; });
     var cfgMes = CFG.meses && CFG.meses[mesKey];
     var metaOf = {}; if(cfgMes && cfgMes.materiales) cfgMes.materiales.forEach(function(m){ if(m.meta) metaOf[+m.id]=+m.meta; });
     if(f.scope) f.scope.forEach(function(id){ if(!byMat[id] && DATA.mats[id]) byMat[id]={id:id,stores:{},tipos:{}}; });
@@ -943,11 +949,22 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
       var metaSrc = scopeRows ? "scope" : (cfgMeta ? "meta" : "universo");
       if(scopeRows) scopeRows.forEach(function(r){
         var s = m.stores[r.codigo];
-        if(s && s.impl) return;   // ya implementado: no es pendiente
+        // avance por promotor de este material: lo arma el scope (asignación real), no quién terminó visitando
+        var prom = r.promotor || "(sin promotor)";
+        var pp = byProm[prom] || (byProm[prom] = {promotor:prom, cadenas:{}, materiales:{}, visitas:0, ok:0, no:0});
+        pp.visitas++; pp.cadenas[r.cadena]=1; pp.materiales[m.id]=1;
+        if(s && s.impl){ pp.ok++; return; }   // ya implementado: no es pendiente
+        pp.no++;
         scopeMissing.push(Object.assign({}, r, { id:m.id, estado: s?"visitada":"nunca", motivo: (s&&s.com)||"" }));
       });
       return {id:m.id, total:st.length, ok:ok, no:st.length-ok, tipos:m.tipos, meta:meta, metaEst:metaSrc!=="meta", metaSrc:metaSrc, fok:m.fok||0, fno:m.fno||0};
     }).sort(function(a,b){ return b.total-a.total || matLabel(a.id).localeCompare(matLabel(b.id)); });
+    lastProm = Object.keys(byProm).map(function(k){
+      var p=byProm[k];
+      return {promotor:p.promotor, cadenas:Object.keys(p.cadenas).sort().join(", "), materiales:Object.keys(p.materiales).length,
+        visitas:p.visitas, ok:p.ok, no:p.no, pctNo: p.visitas?Math.round(p.no*1000/p.visitas)/10:0};
+    }).sort(function(a,b){ return b.no-a.no || b.visitas-a.visitas; });
+    lastScopedIds = scopeByMat;
 
     var storesAll = {}, vis = {}, pairs=0, pairsOk=0;
     recs.forEach(function(r){ storesAll[r.store]=1; vis[r.store+"|"+ymd(r.fecha)]=1; });
@@ -1212,7 +1229,7 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
   $("spDown").addEventListener("click", function(){
     var rows = spRows();
     if(!rows.length){ setStatus("No hay filas para descargar con los filtros actuales.","err"); return; }
-    var data = rows.map(function(r){ return {MATERIAL:matLabel(r.id), CADENA:r.cadena, CODIGO_TT:r.codigo, ESTACION:r.estacion, DISTRITO:r.distrito, PROMOTOR:r.promotor, ESTADO: r.estado==="nunca"?"Nunca visitada":"Visitada sin implementar", MOTIVO:r.motivo||""}; });
+    var data = rows.map(function(r){ return {MATERIAL:matLabel(r.id), CADENA:r.cadena, CODIGO_TT:r.codigo, ESTACION:r.estacion, DISTRITO:r.distrito, FRECUENCIA:r.frecuencia||"", "DIA VISITA":r.diaVisita||"", PROMOTOR:r.promotor, ESTADO: r.estado==="nunca"?"Nunca visitada":"Visitada sin implementar", MOTIVO:r.motivo||""}; });
     var wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(data),"SCOPE PENDIENTE"); XLSX.writeFile(wb,"materiales-scope-pendiente.xlsx");
   });
   $("sfDown").addEventListener("click", function(){
