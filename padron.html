@@ -296,7 +296,7 @@ tr:last-child td{border-bottom:none;}
     var counts={}; rows.forEach(function(r){ var p=tcur(r).promotor||"(sin promotor)"; counts[p]=(counts[p]||0)+1; });
     var names=Object.keys(counts).sort(function(a,b){ return counts[b]-counts[a]; });
     names.forEach(colorFor);
-    $("legend").innerHTML='<h3>Promotores ('+names.length+')</h3><label><input type="checkbox" id="lgAll" checked> <b>Todos</b></label>'+names.map(function(n){
+    $("legend").innerHTML='<h3>Promotores ('+names.length+')</h3><label><input type="checkbox" id="lgAll"'+(Object.keys(hiddenPro).length?'':' checked')+'> <b>Todos</b></label>'+names.map(function(n){
       return '<label><input type="checkbox" data-p="'+esc(n)+'"'+(hiddenPro[n]?'':' checked')+'><span class="dot" style="background:'+colorOf[n]+'"></span>'+esc(n)+'<span class="n">'+counts[n]+'</span></label>'; }).join("");
     layer.clearLayers();
     rows.forEach(function(r){

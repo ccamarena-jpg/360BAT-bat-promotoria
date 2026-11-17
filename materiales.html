@@ -51,12 +51,24 @@ input[type=file]{display:none;}
 .status-line.err{color:var(--crit);} .status-line.ok{color:var(--ok);}
 .empty-banner{display:flex; gap:10px; align-items:center; background:var(--accent-soft); color:var(--accent);
   border:1px solid var(--accent); border-radius:10px; padding:12px 16px; font-size:13.5px; margin-bottom:20px;}
+.alert-box{display:flex; gap:10px; align-items:flex-start; background:var(--warn-bg); color:var(--text);
+  border:1px solid var(--warn); border-radius:10px; padding:12px 16px; font-size:13px;}
+.alert-box b{color:var(--warn);}
+.alert-box ul{margin:6px 0 0; padding-left:18px;}
+.alert-box li{margin-bottom:2px;}
 .filter-bar{display:flex; flex-wrap:wrap; gap:12px 16px; align-items:flex-end; background:var(--surface);
   border:1px solid var(--border); border-radius:12px; padding:12px 16px; box-shadow:var(--shadow); margin-bottom:10px;}
 .filter-field{display:flex; flex-direction:column; gap:4px;}
 .filter-field label{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); font-weight:600;}
 .filter-field select, .filter-field input[type=date]{font-family:inherit; font-size:13px; padding:7px 10px; border-radius:8px;
   border:1px solid var(--border); background:var(--bg); color:var(--text); min-width:150px;}
+a.cnt{color:var(--accent); text-decoration:underline dotted; cursor:pointer;} a.cnt:hover{text-decoration:underline;}
+.modal{position:fixed; inset:0; z-index:100; background:rgba(15,25,45,.55); display:flex; align-items:flex-start; justify-content:center; padding:16px; overflow:auto;}
+.modal[hidden]{display:none;}
+.modal-box{background:var(--surface); border-radius:14px; box-shadow:var(--shadow); width:min(1100px,100%); max-height:90vh; display:flex; flex-direction:column; overflow:hidden;}
+.modal-head{display:flex; gap:12px; justify-content:space-between; align-items:flex-start; padding:14px 18px; border-bottom:1px solid var(--border);}
+.modal-head h3{font-size:16px;} .modal-sub{font-size:12.5px; color:var(--text-muted); margin-top:2px;}
+.modal-actions{display:flex; gap:8px; flex-shrink:0;}
 .filter-hint{font-size:12px; color:var(--text-muted); margin:0 0 16px;}
 .ms{position:relative;}
 .ms-btn{font-family:inherit; font-size:13px; padding:7px 10px; border-radius:8px; border:1px solid var(--border);
@@ -88,6 +100,9 @@ section.block .sub{font-size:12.5px; color:var(--text-muted); margin:0 0 12px;}
 .dot{width:9px; height:9px; border-radius:50%; display:inline-block;}
 .chips{display:flex; flex-wrap:wrap; gap:4px;}
 .chip{font-size:11px; padding:2px 7px; border-radius:999px; background:var(--surface-2); color:var(--text-muted); border:1px solid var(--border);}
+.pill{font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; white-space:nowrap;}
+.pill.ok{background:var(--ok-bg); color:var(--ok);} .pill.warn{background:var(--warn-bg); color:var(--warn);} .pill.crit{background:var(--crit-bg); color:var(--crit);}
+tr.crit{background:var(--crit-bg);}
 .table-wrap{background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); overflow:auto; max-height:520px;}
 table{border-collapse:collapse; width:100%; font-size:13px;}
 th,td{padding:8px 12px; text-align:left; border-bottom:1px solid var(--border); vertical-align:top;}
@@ -161,14 +176,32 @@ footer{font-size:12px; color:var(--text-muted); border-top:1px solid var(--borde
   <section class="block">
     <div class="sec-head">
       <h2>Avance por material</h2>
+      <button class="btn ghost" id="avDown" type="button">⬇ Excel</button>
       <div class="seg" id="viewSeg" role="group" aria-label="Vista">
         <button type="button" data-v="graf" class="on">📊 Gráficos</button>
         <button type="button" data-v="tabla">📋 Tabla</button>
       </div>
     </div>
-    <p class="sub">Se cuentan <b>tiendas</b>. El <b>avance</b> compara las tiendas con el material puesto contra el <b>universo</b>: por defecto, las tiendas distintas del archivo (según cadena y zona filtradas); para un material que solo aplica a algunas tiendas, fija su <code>meta</code> en <code>config/materiales.json</code>. La <b>efectividad</b> solo mira las tiendas ya visitadas con ese material. El gris son las tiendas pendientes. Los chips indican el tipo de implementación.</p>
+    <p class="sub">Se cuentan <b>tiendas</b>. El <b>avance</b> compara las tiendas con el material puesto contra el <b>universo</b>: por defecto, las tiendas distintas del archivo (según cadena y zona filtradas); para un material que solo aplica a algunas tiendas, fija su <code>meta</code> en <code>config/materiales.json</code>. <b>Regla de scope:</b> si el material tiene scope tienda por tienda (SCOPES_MATERIALES), solo cuentan las tiendas de ese scope; lo implementado en otras tiendas no suma y se avisa abajo. La <b>efectividad</b> solo mira las tiendas ya visitadas con ese material. El gris son las tiendas pendientes. Los chips indican el tipo de implementación.</p>
     <div class="pie-grid" id="pies"></div>
     <div class="table-wrap" id="tblAvance" hidden></div>
+  </section>
+
+  <section class="block">
+    <div class="sec-head">
+      <h2>Avance por promotor <span class="chip" id="promCount"></span></h2>
+      <button class="btn ghost" id="promDown" type="button">⬇ Excel</button>
+    </div>
+    <p class="sub">Se cuentan las mismas tienda×material de "Avance por material" (no incluye lo implementado fuera de scope). Clic en "No implementadas" para ver el detalle.</p>
+    <div id="alertProm" style="margin-bottom:12px"></div>
+    <div class="table-wrap" id="tblProm"></div>
+  </section>
+
+  <section class="block" id="fueraSection" hidden>
+    <h2>⚠ Implementado fuera del scope <span class="chip" id="fueraCount"></span></h2>
+    <p class="sub">Tiendas donde se registró el material pero <b>no están en su scope</b>. No suman al avance; revísalas por si es un error de tienda o un cambio de scope.</p>
+    <div class="filter-bar" style="margin-bottom:10px"><button class="btn ghost" id="fueraDown" type="button">⬇ Descargar Excel</button></div>
+    <div class="table-wrap" id="tblFuera"></div>
   </section>
 
   <section class="block" id="scopeSection" hidden>
@@ -216,6 +249,7 @@ footer{font-size:12px; color:var(--text-muted); border-top:1px solid var(--borde
     <p class="sub">Por material: implementaciones registradas (tienda × visita) que no tienen foto en el query. Sirve para reclamar la evidencia al promotor.</p>
     <div class="table-wrap" id="tblSinFoto"></div>
     <h3 style="font-size:14px;margin:16px 0 4px">Casos sin foto y otras fotos de la visita</h3>
+    <div class="filter-bar" style="margin-bottom:10px"><div class="filter-field"><label for="sfBuscar">Buscar</label><input type="search" id="sfBuscar" placeholder="Tienda, material, promotor, cadena…" style="min-width:280px"></div></div>
     <p class="sub" id="sfSub" style="margin-bottom:8px"></p>
     <div class="table-wrap" id="tblSinFotoDet"></div>
     <div style="margin-top:10px"><button class="btn ghost" id="sfDown" type="button">⬇ Descargar Excel de tiendas sin foto</button></div>
@@ -223,6 +257,16 @@ footer{font-size:12px; color:var(--text-muted); border-top:1px solid var(--borde
 </div>
 
 <footer>Los archivos se leen en tu navegador con tu cuenta de Microsoft; no se guardan en la plataforma.</footer>
+
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div><h3 id="modalTitle"></h3><div class="modal-sub" id="modalSub"></div></div>
+      <div class="modal-actions"><button class="btn ghost" id="modalDown" type="button">⬇ Excel</button><button class="btn" id="modalClose" type="button" aria-label="Cerrar">✕</button></div>
+    </div>
+    <div class="table-wrap" id="modalBody" style="border:none;box-shadow:none;max-height:60vh"></div>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
 <script>
@@ -237,7 +281,7 @@ window.MAT_MS = {
 };
 // Dentro de BAT 360 Promotoría los links vienen de site-config.js (un solo lugar)
 try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.links;
-  if(L0){ if(L0.popEjecucion) window.MAT_MS.popUrl=L0.popEjecucion; if(L0.infoGeneral) window.MAT_MS.infoUrl=L0.infoGeneral; } }catch(e){}
+  if(L0){ if(L0.popEjecucion) window.MAT_MS.popUrl=L0.popEjecucion; if(L0.infoGeneral) window.MAT_MS.infoUrl=L0.infoGeneral; if(L0.scopes) window.MAT_MS.scopeUrl=L0.scopes; } }catch(e){}
 </script>
 <script>
 (function(){
@@ -275,6 +319,9 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
   var CFG = { meses:{} };
   var DATA = null;        // { mats:{id:{id,name}}, recs:[...], visitas:n }
   var INFO = null;        // { recs:[{fecha,tienda,cadena,zona,promotor,motivo}] }
+  var lastFuera = [], lastAv = [], lastInfo = [], motItems = [], motName = "motivo";
+  var lastProm = [], lastCounted = [];
+  var ALERTA_MIN_VISITAS = 5, ALERTA_MIN_PCT = 30;   // umbral de la alerta: al menos N visitas con material y >=X% sin implementar
   var SCOPE = null;       // { rows:[{mes,hoja,scopeName,ejecName,cadena,codigo,estacion,distrito,zona,frecuencia,diaVisita,promotor,observacion}], noFigura:{} }
   var lastScopeMissing = [], lastScopeNoTrack = {}, lastScopeMesKey = "";
   var charts = [];
@@ -295,8 +342,15 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
     for(var i=0;i<CATS.length;i++) if(CATS[i][1].test(t)) return CATS[i][0];
     return "Otros motivos";
   }
+  // Cadenas conocidas (prefijo del nombre de tienda): algunas tiendas no traen espacio alrededor del guion
+  // ("TAMBO-FRESNOS-C13" en vez de "TAMBO - FRESNOS C13"), lo que antes partía mal el nombre y mostraba la
+  // tienda completa como si fuera la cadena. Primero se intenta por prefijo conocido; si no calza ninguna,
+  // se cae al corte original por "espacio-guion-espacio".
+  var CADENAS_CONOCIDAS = ["TAMBO","OXXO","PRIMAX","REPSOL","AVA","INDELFI","PECSA","RAPPI"];
   function cadenaDe(fullname){
     var f = clean(fullname); if(!f) return "—";
+    var up = f.toUpperCase();
+    for(var i=0;i<CADENAS_CONOCIDAS.length;i++){ if(up.indexOf(CADENAS_CONOCIDAS[i])===0) return CADENAS_CONOCIDAS[i]; }
     var p = f.split(/\s+-\s+/)[0].trim().toUpperCase();
     return p.length>24 ? p.slice(0,24) : p;
   }
@@ -581,12 +635,12 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
   function pct(a,b){ return b ? Math.round(a*1000/b)/10 : 0; }
   function kpi(l,v,s){ return '<div class="kpi"><div class="k-label">'+esc(l)+'</div><div class="k-value mono">'+esc(v)+'</div><div class="k-sub">'+esc(s)+'</div></div>'; }
   function top3(map, fmt){ return Object.keys(map).sort(function(a,b){return map[b]-map[a];}).slice(0,3).map(fmt).join(", "); }
-  function tableMotivos(groups, extra, heads, total){
+  function tableMotivos(groups, extra, heads, total, kind){
     var keys = Object.keys(groups).sort(function(a,b){ return groups[b].n-groups[a].n; });
     if(!keys.length) return '<div class="empty">Sin registros con los filtros actuales.</div>';
     return '<table><thead><tr><th>Motivo</th><th class="num">#</th><th class="num">%</th><th>'+heads[0]+'</th><th>'+heads[1]+'</th></tr></thead><tbody>'+
       keys.map(function(k){ var g=groups[k], e=extra(g);
-        return '<tr><td>'+esc(k)+'</td><td class="num mono">'+g.n+'</td><td class="num mono">'+pct(g.n,total).toFixed(1)+'%</td><td>'+esc(e[0])+'</td><td>'+esc(e[1])+'</td></tr>'; }).join("")+
+        return '<tr><td>'+esc(k)+'</td><td class="num mono"><a class="cnt" data-kind="'+kind+'" data-m="'+esc(k)+'" title="Ver las tiendas">'+g.n+'</a></td><td class="num mono">'+pct(g.n,total).toFixed(1)+'%</td><td>'+esc(e[0])+'</td><td>'+esc(e[1])+'</td></tr>'; }).join("")+
       '</tbody></table>';
   }
   function ejemplos(map){ return Object.keys(map).sort(function(a,b){return map[b]-map[a];}).slice(0,2).map(function(t){ return "“"+t+"”"; }).join(" · "); }
@@ -594,6 +648,13 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
   var view = "graf", lastList = [], sortKey = "total", sortDir = -1, lastRecs = [];
 
   /* ───────── detalle por tienda y material (con foto) y apartado "sin foto" ───────── */
+  // búsqueda por palabras: todas deben aparecer (en cualquier orden); ignora guiones y signos, así "oxxo - sunset" encuentra "OXXO SUNSET"
+  function matchQ(q, text){
+    var toks = norm(q).split(/[^a-z0-9ñ]+/).filter(Boolean); if(!toks.length) return true;
+    var t = norm(text).replace(/[^a-z0-9ñ]+/g," ");
+    return toks.every(function(w){ return t.indexOf(w)!==-1; });
+  }
+  function recText(r){ return [r.store,r.tienda,r.promotor,r.cadena,r.distrito,matLabel(r.mat),r.com,r.motivo,r.tipo].join(" "); }
   function detRows(){
     var est=$("dEstado").value, fo=$("dFoto").value, q=norm($("dBuscar").value);
     return lastRecs.filter(function(r){
@@ -601,7 +662,7 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
       if(est==="impl" && r.impl!==1) return false;
       if(fo==="con" && !r.foto) return false;
       if(fo==="sin" && r.foto) return false;
-      if(q && norm([r.store,r.tienda,r.promotor,r.cadena,r.distrito].join(" ")).indexOf(q)===-1) return false;
+      if(q && !matchQ($("dBuscar").value, recText(r))) return false;
       return true;
     }).sort(function(a,b){ return b.fecha-a.fecha; });
   }
@@ -643,6 +704,10 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
       : '<div class="empty">Sin registros con ese filtro.</div>';
     reportHeight();
   }
+  function sfCasos(){
+    var q=$("sfBuscar").value;
+    return lastRecs.filter(function(r){ return r.impl===1 && !r.foto && (!q || matchQ(q, recText(r))); }).sort(function(a,b){ return b.fecha-a.fecha; });
+  }
   function renderSinFoto(){
     var by={}; lastRecs.forEach(function(r){ if(r.impl!==1) return; var g=by[r.mat]||(by[r.mat]={n:0,sin:0,stores:{}}); g.n++; if(!r.foto){ g.sin++; g.stores[r.store]=1; } });
     var ids=Object.keys(by).sort(function(a,b){ return by[b].sin-by[a].sin; });
@@ -653,7 +718,7 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
         return '<tr><td>'+esc(matLabel(k))+'</td><td class="num mono">'+g.n+'</td><td class="num mono">'+(g.n-g.sin)+'</td><td class="num mono">'+g.sin+'</td><td class="num mono"><span class="pill '+(p>=30?'crit':p>=10?'warn':'ok')+'">'+p.toFixed(1)+'%</span></td><td class="num mono">'+Object.keys(g.stores).length+'</td></tr>'; }).join("")+
       '<tr><td><b>Total</b></td><td class="num mono"><b>'+tot.n+'</b></td><td class="num mono"><b>'+(tot.n-tot.s)+'</b></td><td class="num mono"><b>'+tot.s+'</b></td><td class="num mono"><b>'+pct(tot.s,tot.n).toFixed(1)+'%</b></td><td></td></tr></tbody></table>';
     // detalle de los casos sin foto propia, con las otras fotos de esa visita para revisarlas a mano
-    var casos=lastRecs.filter(function(r){ return r.impl===1 && !r.foto; }).sort(function(a,b){ return b.fecha-a.fecha; }), MAXC=300;
+    var casos=sfCasos(), MAXC=300;
     var conOtras=casos.filter(function(r){ return visitFotos(r).length; }).length;
     $("sfSub").textContent=casos.length.toLocaleString("es-PE")+" casos sin foto propia · "+conOtras.toLocaleString("es-PE")+" tienen al menos otra foto de la visita"+(INFO?"":" (carga Información General para ver la panorámica y el counter)")+(casos.length>MAXC?" · se muestran "+MAXC+" (el Excel baja todos)":"");
     $("tblSinFotoDet").innerHTML = !casos.length ? '<div class="empty">Sin casos en el periodo.</div>' :
@@ -667,7 +732,7 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
     return lastScopeMissing.filter(function(r){
       if(est==="nunca" && r.estado!=="nunca") return false;
       if(est==="visitada" && r.estado!=="visitada") return false;
-      if(q && norm([r.codigo,r.estacion,r.promotor,r.cadena,r.distrito].join(" ")).indexOf(q)===-1) return false;
+      if(q && !matchQ($("spBuscar").value, [r.codigo,r.estacion,r.promotor,r.cadena,r.distrito,matLabel(r.id)].join(" "))) return false;
       return true;
     }).sort(function(a,b){ return matLabel(a.id).localeCompare(matLabel(b.id)) || a.estacion.localeCompare(b.estacion); });
   }
@@ -695,6 +760,88 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
       }).join("")+'</tbody></table>';
     reportHeight();
   }
+  function renderFuera(){
+    var sec=$("fueraSection"); if(!lastFuera.length){ sec.hidden=true; return; }
+    sec.hidden=false; $("fueraCount").textContent=lastFuera.length.toLocaleString("es-PE");
+    var rows=lastFuera.slice().sort(function(a,b){ return matLabel(a.id).localeCompare(matLabel(b.id)) || (a.tienda||"").localeCompare(b.tienda||""); });
+    $("tblFuera").innerHTML='<table><thead><tr><th>Material</th><th>Cadena</th><th>Código</th><th>Tienda</th><th>Promotor</th><th>Fecha</th></tr></thead><tbody>'+
+      rows.slice(0,300).map(function(r){ return '<tr><td>'+esc(matLabel(r.id))+'</td><td>'+esc(r.cadena)+'</td><td class="mono">'+esc(r.store)+'</td><td>'+esc(r.tienda)+'</td><td>'+esc(r.promotor)+'</td><td class="mono">'+ymd(r.fecha)+'</td></tr>'; }).join("")+'</tbody></table>'+
+      (rows.length>300?'<div class="empty">Se muestran 300 de '+rows.length+'. El Excel baja todas.</div>':'');
+  }
+  function renderPromotores(){
+    $("promCount").textContent = lastProm.length.toLocaleString("es-PE");
+    var alerta = lastProm.filter(function(p){ return p.visitas>=ALERTA_MIN_VISITAS && p.pctNo>=ALERTA_MIN_PCT; });
+    $("alertProm").innerHTML = !alerta.length ? "" :
+      '<div class="alert-box">⚠️<div><b>'+alerta.length+' promotor(es) visitan la tienda y no implementan el material</b> (≥'+ALERTA_MIN_VISITAS+' tienda×material visitadas en el periodo y ≥'+ALERTA_MIN_PCT+'% sin implementar):'+
+      '<ul>'+alerta.map(function(p){ return '<li><b>'+esc(p.promotor)+'</b> ('+esc(p.cadenas)+') — <a class="cnt" data-kind="prom" data-m="'+esc(p.promotor)+'" title="Ver las tiendas">'+p.no+' de '+p.visitas+'</a> sin implementar ('+p.pctNo.toFixed(1)+'%)</li>'; }).join("")+
+      '</ul></div></div>';
+    $("tblProm").innerHTML = !lastProm.length ? '<div class="empty">No hay registros con los filtros actuales.</div>' :
+      '<table><thead><tr><th>Promotor</th><th>Cadena(s)</th><th class="num">Materiales</th><th class="num">Tienda×material</th><th class="num">Implementadas</th><th class="num">No implementadas</th><th class="num">% sin implementar</th></tr></thead><tbody>'+
+      lastProm.map(function(p){
+        var flag = p.visitas>=ALERTA_MIN_VISITAS && p.pctNo>=ALERTA_MIN_PCT;
+        return '<tr'+(flag?' class="crit"':'')+'><td>'+esc(p.promotor)+(flag?' ⚠️':'')+'</td><td>'+esc(p.cadenas)+'</td><td class="num mono">'+p.materiales+'</td><td class="num mono">'+p.visitas+'</td><td class="num mono">'+p.ok+'</td><td class="num mono"><a class="cnt" data-kind="prom" data-m="'+esc(p.promotor)+'" title="Ver las tiendas">'+p.no+'</a></td><td class="num mono"><span class="pill '+(p.pctNo>=ALERTA_MIN_PCT?'crit':p.pctNo>=10?'warn':'ok')+'">'+p.pctNo.toFixed(1)+'%</span></td></tr>';
+      }).join("")+'</tbody></table>';
+  }
+  $("promDown").addEventListener("click",function(){
+    if(!lastProm.length){ setStatus("No hay datos de promotores para descargar con los filtros actuales.","err"); return; }
+    var data=lastProm.map(function(p){ return {PROMOTOR:p.promotor, "CADENA(S)":p.cadenas, MATERIALES:p.materiales, "TIENDA X MATERIAL":p.visitas, IMPLEMENTADAS:p.ok, "NO IMPLEMENTADAS":p.no, "% SIN IMPLEMENTAR":p.pctNo+"%"}; });
+    var wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(data),"AVANCE POR PROMOTOR");
+    XLSX.writeFile(wb,"materiales-avance-promotor"+($("fMes").value?"-"+$("fMes").value:"")+".xlsx");
+  });
+  $("avDown").addEventListener("click",function(){
+    if(!lastAv.length){ setStatus("No hay datos de avance para descargar con los filtros actuales.","err"); return; }
+    var data=lastAv.map(function(r){ return { MATERIAL:r.nombre, UNIVERSO:r.meta||"", VISITADAS:r.total, IMPLEMENTADAS:r.ok, "NO IMPL.":r.no, PENDIENTES:r.meta?r.pend:"",
+      "AVANCE VS UNIVERSO":r.avance<0?"":Math.round(r.avance*1000)/10+"%", "EFECTIVIDAD EN VISITADAS":r.pct<0?"":Math.round(r.pct*1000)/10+"%",
+      "IMPL. CON FOTO":r.fok, "IMPL. SIN FOTO":r.fno, "% CON FOTO":r.fpct<0?"":Math.round(r.fpct*100)+"%", "TIPO DE IMPLEMENTACIÓN":r.tipos||"", "IMPLEMENTADO FUERA DE SCOPE (tiendas)":r.fuera||0 }; });
+    var wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(data),"AVANCE POR MATERIAL");
+    XLSX.writeFile(wb,"materiales-avance"+($("fMes").value?"-"+$("fMes").value:"")+".xlsx");
+  });
+  $("fueraDown").addEventListener("click",function(){
+    if(!lastFuera.length) return;
+    var data=lastFuera.map(function(r){ return {MATERIAL:matLabel(r.id), CADENA:r.cadena, CODIGO_TT:r.store, TIENDA:r.tienda, PROMOTOR:r.promotor, FECHA:ymd(r.fecha), "CON FOTO":r.foto?"SÍ":"NO"}; });
+    var wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(data),"FUERA DE SCOPE"); XLSX.writeFile(wb,"materiales-fuera-de-scope.xlsx");
+  });
+  /* ventana con las tiendas de un motivo (no implementado / no cobertura) */
+  function openMotivo(kind, motivo){
+    var items, rows;
+    if(kind==="imp"){
+      items = lastRecs.filter(function(r){ return r.impl===0 && categoria(r.com)===motivo; });
+      rows = items.map(function(r){ return {FECHA:ymd(r.fecha), CADENA:r.cadena, CODIGO_TT:r.store, TIENDA:r.tienda, MATERIAL:matLabel(r.mat), PROMOTOR:r.promotor, MOTIVO:r.com||""}; });
+    } else if(kind==="prom"){
+      items = lastCounted.filter(function(r){ return r.impl===0 && (r.promotor||"(sin promotor)")===motivo; });
+      rows = items.map(function(r){ return {FECHA:ymd(r.fecha), CADENA:r.cadena, CODIGO_TT:r.store, TIENDA:r.tienda, MATERIAL:matLabel(r.mat), PROMOTOR:r.promotor, MOTIVO:r.com||""}; });
+    } else {
+      items = lastInfo.filter(function(r){ return categoria(r.motivo)===motivo; });
+      rows = items.map(function(r){ return {FECHA:ymd(r.fecha), CADENA:r.cadena, CODIGO_TT:r.store, TIENDA:r.tienda, PROMOTOR:r.promotor, MOTIVO:r.motivo||""}; });
+    }
+    rows.sort(function(a,b){ return b.FECHA.localeCompare(a.FECHA) || a.TIENDA.localeCompare(b.TIENDA); });
+    motItems = rows; motName = "tiendas-"+(kind==="imp"?"no-implementado":kind==="prom"?"promotor":"no-cobertura")+"-"+norm(motivo).replace(/[^a-z0-9]+/g,"-");
+    $("modalTitle").textContent = motivo;
+    $("modalSub").textContent = rows.length+" "+(kind==="imp"||kind==="prom"?"registro(s) de tienda × material sin implementar":"visita(s) no efectiva(s)");
+    var MAXM=400, mat = kind==="imp"||kind==="prom";
+    $("modalBody").innerHTML = !rows.length ? '<div class="empty">Sin registros.</div>' :
+      '<table><thead><tr><th>Fecha</th><th>Cadena</th><th>Código</th><th>Tienda</th>'+(mat?'<th>Material</th>':'')+'<th>Promotor</th><th>Texto del motivo</th></tr></thead><tbody>'+
+      rows.slice(0,MAXM).map(function(r){ return '<tr><td class="mono">'+esc(r.FECHA)+'</td><td>'+esc(r.CADENA)+'</td><td class="mono">'+esc(r.CODIGO_TT)+'</td><td>'+esc(r.TIENDA)+'</td>'+(mat?'<td>'+esc(r.MATERIAL)+'</td>':'')+'<td>'+esc(r.PROMOTOR)+'</td><td>'+esc(r.MOTIVO||"—")+'</td></tr>'; }).join("")+'</tbody></table>'+
+      (rows.length>MAXM?'<div class="empty">Se muestran '+MAXM+' de '+rows.length+'. El Excel baja todas.</div>':'');
+    $("modal").hidden=false; placeModal();
+  }
+  // la página vive en un iframe alto: se coloca la ventana donde el usuario está mirando
+  function placeModal(){
+    var off=0, vh=window.innerHeight;
+    try{ var fe=window.frameElement; if(fe){ var r=fe.getBoundingClientRect(); off=Math.max(0,-r.top); vh=window.parent.innerHeight; } }catch(e){}
+    var box=document.querySelector("#modal .modal-box");
+    box.style.marginTop=(off+12)+"px"; box.style.maxHeight=Math.max(320,vh-48)+"px";
+    $("modalBody").style.maxHeight=Math.max(220,vh-170)+"px";
+  }
+  function closeModal(){ $("modal").hidden=true; }
+  $("modalClose").addEventListener("click",closeModal);
+  $("modal").addEventListener("click",function(e){ if(e.target===$("modal")) closeModal(); });
+  document.addEventListener("keydown",function(e){ if(e.key==="Escape" && !$("modal").hidden) closeModal(); });
+  $("modalDown").addEventListener("click",function(){
+    if(!motItems.length) return;
+    var wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(motItems),"TIENDAS"); XLSX.writeFile(wb,motName+".xlsx");
+  });
+  document.addEventListener("click",function(e){ var a=e.target.closest("a.cnt[data-kind]"); if(a) openMotivo(a.getAttribute("data-kind"), a.getAttribute("data-m")); });
   function applyView(){
     $("pies").hidden = view!=="graf";
     $("tblAvance").hidden = view!=="tabla";
@@ -708,6 +855,9 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
         fok:m.fok, fno:m.fno, fpct:(m.fok+m.fno)?m.fok/(m.fok+m.fno):-1,
         tipos:Object.keys(m.tipos).map(function(t){ return t+": "+m.tipos[t]; }).join(" · ") };
     });
+    var fcount={}; lastFuera.forEach(function(f){ fcount[f.id]=(fcount[f.id]||0)+1; });
+    rows.forEach(function(r){ r.fuera=fcount[r.id]||0; });
+    lastAv = rows;
     rows.sort(function(a,b){
       var x=a[sortKey], y=b[sortKey];
       if(typeof x==="string") return sortDir*x.localeCompare(y);
@@ -737,26 +887,10 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
   function render(){
     if(!DATA) return;
     var f = filtered(), recs = f.recs;
-    var byMat = {};
-    recs.forEach(function(r){
-      var m = byMat[r.mat] || (byMat[r.mat] = {id:r.mat, stores:{}, tipos:{}, fok:0, fno:0});
-      var s = m.stores[r.store] || (m.stores[r.store] = {impl:false});
-      if(r.impl===1){ s.impl=true; var t=r.tipo||"Sin tipo"; m.tipos[t]=(m.tipos[t]||0)+1; if(r.foto) m.fok++; else m.fno++; }
-      else if(r.impl===0 && r.com) s.com = r.com;
-    });
-    var mesKey = $("fMes").value, cfgMes = CFG.meses && CFG.meses[mesKey];
-    var metaOf = {}; if(cfgMes && cfgMes.materiales) cfgMes.materiales.forEach(function(m){ if(m.meta) metaOf[+m.id]=+m.meta; });
-    if(f.scope) f.scope.forEach(function(id){ if(!byMat[id] && DATA.mats[id]) byMat[id]={id:id,stores:{},tipos:{}}; });
-    // Universo estimado = tiendas distintas del archivo (todas las fechas) que cumplen cadena y zona. La meta del
-    // config (tiendas objetivo del material) tiene prioridad cuando no hay filtro de cadena/zona.
-    var zonaSel = $("fZona").value, uniSet = {};
-    DATA.recs.forEach(function(r){ if(zonaSel && r.zona!==zonaSel) return; if(sel.cad && !sel.cad.has(r.cadena)) return; uniSet[r.store]=1; });
-    var universo = Object.keys(uniSet).length, filtrado = !!(zonaSel || sel.cad);
-
+    var mesKey = $("fMes").value;
+    var zonaSel = $("fZona").value;
     // Scope del mes elegido (archivo SCOPES_MATERIALES), filtrado por cadena/zona igual que el resto de la vista.
-    // Si hay scope para un material, manda sobre la meta de config.json y sobre el universo estimado (es el
-    // target real tienda por tienda, no un conteo global), y permite listar exactamente qué tiendas faltan.
-    var scopeByMat = {}, scopeMissing = [], scopeNoTrack = {};
+    var scopeByMat = {}, scopeSet = {}, scopeMissing = [], scopeNoTrack = {};
     if(SCOPE && mesKey){
       SCOPE.rows.forEach(function(r){
         if(r.mes!==mesKey) return;
@@ -765,8 +899,42 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
         if(sel.cad && !sel.cad.has(r.cadena)) return;
         var id = ejecIdByName(r.ejecName); if(!id) return;
         (scopeByMat[id] = scopeByMat[id] || []).push(r);
+        (scopeSet[id] = scopeSet[id] || {})[r.codigo]=1;
       });
     }
+    var byMat = {}, fuera = {}, byProm = {}, countedRecs = [];
+    recs.forEach(function(r){
+      // regla de scope: con scope del material, solo cuentan sus tiendas; lo implementado en otras tiendas va a la alerta
+      if(scopeSet[r.mat] && !scopeSet[r.mat][r.store]){
+        if(r.impl===1){ var fk=r.mat+"|"+r.store; if(!fuera[fk]) fuera[fk]={id:r.mat, store:r.store, tienda:r.tienda, cadena:r.cadena, promotor:r.promotor, fecha:r.fecha, foto:!!r.foto}; }
+        return;
+      }
+      countedRecs.push(r);
+      var m = byMat[r.mat] || (byMat[r.mat] = {id:r.mat, stores:{}, tipos:{}, fok:0, fno:0});
+      var s = m.stores[r.store] || (m.stores[r.store] = {impl:false});
+      if(r.impl===1){ s.impl=true; var t=r.tipo||"Sin tipo"; m.tipos[t]=(m.tipos[t]||0)+1; if(r.foto) m.fok++; else m.fno++; }
+      else if(r.impl===0 && r.com) s.com = r.com;
+      var prom = r.promotor || "(sin promotor)";
+      var p = byProm[prom] || (byProm[prom] = {promotor:prom, cadenas:{}, materiales:{}, visitas:0, ok:0, no:0});
+      p.visitas++; p.cadenas[r.cadena]=1; p.materiales[r.mat]=1; if(r.impl===1) p.ok++; else p.no++;
+    });
+    lastFuera = Object.keys(fuera).map(function(k){ return fuera[k]; });
+    lastCounted = countedRecs;
+    lastProm = Object.keys(byProm).map(function(k){
+      var p=byProm[k];
+      return {promotor:p.promotor, cadenas:Object.keys(p.cadenas).sort().join(", "), materiales:Object.keys(p.materiales).length,
+        visitas:p.visitas, ok:p.ok, no:p.no, pctNo: p.visitas?Math.round(p.no*1000/p.visitas)/10:0};
+    }).sort(function(a,b){ return b.no-a.no || b.visitas-a.visitas; });
+    var cfgMes = CFG.meses && CFG.meses[mesKey];
+    var metaOf = {}; if(cfgMes && cfgMes.materiales) cfgMes.materiales.forEach(function(m){ if(m.meta) metaOf[+m.id]=+m.meta; });
+    if(f.scope) f.scope.forEach(function(id){ if(!byMat[id] && DATA.mats[id]) byMat[id]={id:id,stores:{},tipos:{}}; });
+    // Universo estimado = tiendas distintas del archivo (todas las fechas) que cumplen cadena y zona. La meta del
+    // config (tiendas objetivo del material) tiene prioridad cuando no hay filtro de cadena/zona.
+    var uniSet = {};
+    DATA.recs.forEach(function(r){ if(zonaSel && r.zona!==zonaSel) return; if(sel.cad && !sel.cad.has(r.cadena)) return; uniSet[r.store]=1; });
+    var universo = Object.keys(uniSet).length, filtrado = !!(zonaSel || sel.cad);
+
+    Object.keys(scopeByMat).forEach(function(id){ if(!byMat[id] && DATA.mats[id]) byMat[id]={id:+id,stores:{},tipos:{},fok:0,fno:0}; });
     var list = Object.keys(byMat).map(function(k){
       var m=byMat[k], st=Object.keys(m.stores), ok=st.filter(function(s){return m.stores[s].impl;}).length;
       var scopeRows = scopeByMat[m.id];
@@ -831,24 +999,26 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
     });
     $("tblMotivos").innerHTML = tableMotivos(gm, function(g){
       return [ top3(g.mats, function(id){ return matLabel(id)+" ("+g.mats[id]+")"; }), ejemplos(g.ej) ];
-    }, ["Materiales afectados","Ejemplos"], noImpl.length);
+    }, ["Materiales afectados","Ejemplos"], noImpl.length, "imp");
 
     if(f.info){
       var gc={};
       f.info.forEach(function(r){ var c=categoria(r.motivo), g=gc[c]||(gc[c]={n:0,cad:{},ej:{}}); g.n++; g.cad[r.cadena]=(g.cad[r.cadena]||0)+1; if(r.motivo) g.ej[r.motivo]=(g.ej[r.motivo]||0)+1; });
       $("tblCobertura").innerHTML = tableMotivos(gc, function(g){
         return [ top3(g.cad, function(c){ return c+" ("+g.cad[c]+")"; }), ejemplos(g.ej) ];
-      }, ["Cadenas","Ejemplos"], f.info.length);
+      }, ["Cadenas","Ejemplos"], f.info.length, "cob");
     } else {
       $("tblCobertura").innerHTML = '<div class="empty">Carga el Excel <b>582-INFORMACIÓN GENERAL</b> (botón de arriba o conexión con SharePoint) para ver los motivos de no cobertura.</div>';
     }
 
-    lastRecs = recs;
+    lastRecs = recs; lastInfo = f.info||[];
     renderDetalle();
     renderSinFoto();
 
     lastScopeMissing = scopeMissing; lastScopeNoTrack = scopeNoTrack; lastScopeMesKey = mesKey;
     renderScopePend(scopeNoTrack, mesKey);
+    renderFuera();
+    renderPromotores();
 
     var scopeTxt = f.scope ? "Mostrando los "+f.scope.size+" materiales configurados para "+mesLabel(mesKey)+"." :
       (mesKey && $("fAlcance").value==="mes" ? "No hay materiales configurados para "+mesLabel(mesKey)+" en config/materiales.json: se muestran todos los que tienen registros." : "Mostrando todos los materiales.");
@@ -965,7 +1135,7 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
       if(document.hidden || msBusy || !msalApp) return;
       msBusy=true; autoMode=true;
       msToken(false).then(function(t){
-        return fetchBook(t, MS.popUrl, MOD.pop, "pop").then(function(wb){ if(wb) applyWb(wb,"pop","SharePoint · 582-EJECUCIÓN-POP (en vivo)"); else { CHK=new Date(); showMod(); } })
+        return fetchBook(t, MS.popUrl, MOD.pop, "pop").then(function(wb){ if(wb) applyWb(wb,"pop","SharePoint · 582-EJECUCIÓN-POP (en vivo)"); else { CHK=new Date(); showMod(); } loadScopeLive(t); })
           .then(function(){ return fetchBook(t, MS.infoUrl, MOD.info, "info").then(function(wb2){ if(wb2) applyWb(wb2,"info",""); }).catch(function(){}); });
       }).catch(function(){}).finally(function(){ msBusy=false; autoMode=false; });
     }, 10*60*1000);
@@ -982,6 +1152,19 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
     else t="No se pudo cargar desde SharePoint: "+msg;
     setStatus("⚠ "+t,"err");
   }
+  // El scope (SCOPES_MATERIALES) se lee solo desde SharePoint si el sitio tiene links.scopes; la carga manual sigue disponible
+  var scopeMod=null;
+  function loadScopeLive(token){
+    if(!MS.scopeUrl) return;
+    var base="https://graph.microsoft.com/v1.0/shares/u!"+b64url(MS.scopeUrl)+"/driveItem", opt={headers:{Authorization:"Bearer "+token}};
+    fetch(base+"?$select=lastModifiedDateTime",opt).then(function(r){ return r.ok?r.json():null; }).then(function(m){
+      var mod=m&&m.lastModifiedDateTime; if(SCOPE&&mod&&mod===scopeMod) return;
+      return fetch(base+"/content",opt).then(function(r){ if(!r.ok) throw new Error("Graph HTTP "+r.status); return r.arrayBuffer(); }).then(function(buf){
+        var sc=parseScope(XLSX.read(buf,{type:"array",cellDates:true})); if(sc.error) throw new Error(sc.error);
+        SCOPE=sc; scopeMod=mod; if(DATA) render(); else renderScopePend({}, $("fMes").value);
+      });
+    }).catch(function(e){ setStatus($("statusLine").textContent+" · Scope no disponible ("+((e&&e.message)||"error")+"): cárgalo manualmente.","ok"); });
+  }
   function loadLive(silent){
     if(msBusy) return; msBusy=true;
     if(!silent) setStatus("Conectando con SharePoint…");
@@ -990,7 +1173,7 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
       var infoP=fetchBook(token, MS.infoUrl, null, "info"); infoP.catch(function(){});   // se descarga en paralelo a Ejecución POP
       return fetchBook(token, MS.popUrl, null, "pop").then(function(wb){
         if(!applyWb(wb,"pop","SharePoint · 582-EJECUCIÓN-POP (en vivo)")) return;
-        $("msRefreshBtn").hidden=false; startAuto();
+        $("msRefreshBtn").hidden=false; startAuto(); loadScopeLive(token);
         setStatus("✓ Ejecución POP cargada · procesando Información General…","ok");
         return infoP.then(function(wb2){
           var base=$("statusLine").textContent;
@@ -1022,6 +1205,7 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
   msCad = msBuild($("msCad"),"Cadena", function(s){ sel.cad=s; render(); });
   ["dEstado","dFoto"].forEach(function(id){ $(id).addEventListener("change", renderDetalle); });
   $("dBuscar").addEventListener("input", renderDetalle);
+  $("sfBuscar").addEventListener("input", renderSinFoto);
   $("dDown").addEventListener("click", function(){ downloadRows(detRows(), "materiales-detalle.xlsx"); });
   $("spEstado").addEventListener("change", function(){ renderScopePend(lastScopeNoTrack, lastScopeMesKey); });
   $("spBuscar").addEventListener("input", function(){ renderScopePend(lastScopeNoTrack, lastScopeMesKey); });
@@ -1032,7 +1216,7 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
     var wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(data),"SCOPE PENDIENTE"); XLSX.writeFile(wb,"materiales-scope-pendiente.xlsx");
   });
   $("sfDown").addEventListener("click", function(){
-    downloadRows(lastRecs.filter(function(r){ return r.impl===1 && !r.foto; }).sort(function(a,b){ return b.fecha-a.fecha; }), "materiales-sin-foto.xlsx");
+    downloadRows(sfCasos(), "materiales-sin-foto.xlsx");
   });
   $("viewSeg").addEventListener("click", function(e){
     var b = e.target.closest("button[data-v]"); if(!b) return;
@@ -1045,7 +1229,7 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
     return fetch("config/materiales.json?v="+Date.now()).then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
       .then(function(j){ CFG = j || {meses:{}}; }).catch(function(){ CFG = {meses:{}}; });
   }
-  window.__mat = { applyWb:applyWb, fetchBook:fetchBook, parseScope:parseScope, getScope:function(){return SCOPE;}, getMissing:function(){return lastScopeMissing;} };   // gancho para verificación local
+  window.__mat = { applyWb:applyWb, fetchBook:fetchBook, parseScope:parseScope, getScope:function(){return SCOPE;}, getMissing:function(){return lastScopeMissing;}, setScope:function(s){SCOPE=s;}, setData:function(d){DATA=d; refreshControls(); render();}, fuera:function(){return lastFuera;}, av:function(){return lastAv;} };   // gancho para verificación local
   loadCfg().then(initMs);
 
   function reportHeight(){
