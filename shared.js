@@ -200,6 +200,104 @@
     return { visits:visits, byStore:by };
   };
 
+  /* Cadena a partir del nombre completo de tienda (fullname de los queries). Primero por prefijo de cadena conocida
+     (algunas tiendas no traen espacio alrededor del guion, ej. "TAMBO-FRESNOS-C13", y el corte ingenuo las agrupaba
+     como si fueran su propia cadena); si no calza ninguna, se cae al corte por "espacio-guion-espacio". */
+  var CADENAS_CONOCIDAS=["TAMBO","OXXO","PRIMAX","REPSOL","AVA","INDELFI","PECSA","RAPPI"];
+  B.cadenaDe = function(fullname){
+    var f=B.clean(fullname); if(!f) return "—";
+    var up=f.toUpperCase();
+    for(var i=0;i<CADENAS_CONOCIDAS.length;i++){ if(up.indexOf(CADENAS_CONOCIDAS[i])===0) return CADENAS_CONOCIDAS[i]; }
+    var p=f.split(/\s+-\s+/)[0].trim().toUpperCase();
+    return p.length>24? p.slice(0,24) : p;
+  };
+  /* Zona a partir de type/region/ubigeo (region viene vacío para muchas tiendas KACC de Lima; ahí el departamento está en ubigeo). */
+  B.zonaDe = function(type, region, ubigeo){
+    var r=B.norm(region)||B.norm(ubigeo);
+    if(r==="lima"||r==="callao"||r==="lima metropolitana") return "LIMA";
+    return /kacc/i.test(String(type||""))? "KC" : "NKC";
+  };
+
+  /* Conteo de stock VUSE/VELO con vencimientos próximos: una fila por visita de conteo. Por cada SKU, la cantidad
+     real y su(s) vencimiento(s) vienen en las columnas "…-Comment" (las columnas base "-CANTIDAD-id:NNNN" y
+     "-VENCIMIENTOS PROXIMOS-id:NNNN" siempre traen "0", son placeholders del formulario):
+       "…-CANTIDAD-id:NNNN-Comment"             → cantidad total encontrada de ese SKU en la visita (texto, ej. "8")
+       "…-VENCIMIENTOS PROXIMOS-id:NNNN-Comment" → uno o más lotes "CANTIDAD->FECHA" separados por ";" (ej.
+         "4->04-10-2026;1->14-12-2026;3->01-01-2027"); si no trae "->", es un solo lote con toda la cantidad del
+         campo CANTIDAD-Comment y solo la fecha (ej. "10-12-2027"). Fechas en DD-MM-AAAA, DD-MM-AA, o sin separador
+         (DDMMAAAA/DDMMAA) — texto libre, así que se acepta cualquiera de esas variantes. */
+  function parseVencFecha(s){
+    // Texto libre: hay muchos typos (dígitos de más/de menos, guiones mal puestos, p.ej. "18-111-27" o "0785279").
+    // Solo se acepta cuando calza EXACTO con un separador claro (2 o 4 dígitos de año, nunca 1 o 3) y el resultado
+    // es una fecha real y plausible (2024-2035); cualquier otra cosa se descarta como "no reconocida" en vez de
+    // adivinar — una fecha de vencimiento equivocada es peor que no tenerla.
+    s=B.clean(s); var m, d,mo,y;
+    if((m=/^(\d{1,2})-(\d{1,2})-(\d{2}|\d{4})$/.exec(s))){ d=+m[1]; mo=+m[2]; y=+m[3]; }
+    else if((m=/^(\d{2})(\d{2})(\d{2}|\d{4})$/.exec(s))){ d=+m[1]; mo=+m[2]; y=+m[3]; }
+    else if((m=/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/.exec(s))){ d=+m[1]; mo=+m[2]; y=+m[3]; }
+    else return null;
+    if(String(m[3]).length===2) y+=2000;
+    if(mo<1||mo>12||d<1||d>31||y<2024||y>2035) return null;
+    var dt=new Date(y,mo-1,d);
+    if(dt.getMonth()!==mo-1) return null;   // ej. "31-04-2027" (abril no tiene 31)
+    return dt;
+  }
+  B.parseConteo = function(wb){
+    var sn=wb.SheetNames[0];
+    var head=headerRow(wb.Sheets[sn]).map(String);
+    var idx={}; head.forEach(function(h,i){ if(!(h in idx)) idx[h]=i; });
+    if(idx.store_id===undefined || idx.fecha===undefined) return {error:"No encontré las columnas store_id / fecha."};
+    var skuName={}, cantComIdx={}, vencComIdx={}, m;
+    head.forEach(function(h,i){
+      if((m=/^(.*)-CANTIDAD-id:(\d+)-Comment$/.exec(h))){ cantComIdx[+m[2]]=i; skuName[+m[2]]=m[1].trim(); }
+      else if((m=/^(.*)-VENCIMIENTOS PROXIMOS-id:(\d+)-Comment$/.exec(h))){ vencComIdx[+m[2]]=i; skuName[+m[2]]=m[1].trim(); }
+    });
+    var ids=Object.keys(skuName).map(Number);
+    if(!ids.length) return {error:"No encontré columnas de SKU (…-CANTIDAD-id:NNNN-Comment)."};
+    var iStore=idx.store_id, iName=idx.fullname, iType=idx.type, iReg=idx.region, iUbi=idx.ubigeo, iDist=idx.district, iAud=idx.auditor, iFecha=idx.fecha;
+    var rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:"",raw:true,blankrows:false});
+    // Es texto libre: a veces el promotor escribe la cantidad pegada a la fecha por error (ej. "3230328" en vez de
+    // "3" con vencimiento 23-03-28). Un lote de más de QTY_MAX unidades es casi seguro un error de tipeo, no stock
+    // real — se separa en "sospechosos" para revisar, y no entra a los totales/gráficos.
+    var QTY_MAX=400;
+    var batches=[], sospechosos=[], visits=[];
+    for(var r=1;r<rows.length;r++){
+      var row=rows[r];
+      var fecha=B.parseDate(row[iFecha]); if(!fecha) continue;
+      if(B.histCut && fecha<B.histCut) continue;
+      var store=B.clean(row[iStore]); if(!store) continue;
+      var base={ store:store, tienda:B.clean(row[iName]), cadena:B.cadenaDe(row[iName]), zona:B.zonaDe(row[iType],row[iReg],row[iUbi]),
+        distrito:B.clean(row[iDist]), promotor:B.clean(row[iAud]), fecha:fecha };
+      var any=false;
+      ids.forEach(function(id){
+        var cc=cantComIdx[id]!==undefined? B.clean(row[cantComIdx[id]]) : "";
+        var vc=vencComIdx[id]!==undefined? B.clean(row[vencComIdx[id]]) : "";
+        if(!cc && !vc) return;
+        any=true;
+        var totalQty=parseInt(cc,10); if(!isFinite(totalQty)) totalQty=0;
+        function push(qty, dateStr){
+          var d=dateStr!=null? parseVencFecha(dateStr) : null;
+          if(!(qty>0) && !d) return;
+          var b={store:base.store,tienda:base.tienda,cadena:base.cadena,zona:base.zona,distrito:base.distrito,promotor:base.promotor,fecha:base.fecha,skuId:id,sku:skuName[id],qty:qty||0,venc:d,
+            fechaIlegible: !!(dateStr && !d), textoOriginal:vc||cc};
+          (qty>QTY_MAX? sospechosos : batches).push(b);
+        }
+        if(!vc){ if(totalQty>0) push(totalQty, null); return; }
+        var segs=vc.split(/[;\n]+/).map(function(s){return s.trim();}).filter(Boolean);
+        var parsed=[], sumKnown=0, unknown=0;
+        segs.forEach(function(seg){
+          var mm=/^(\d+)\s*->\s*(.+)$/.exec(seg);
+          if(mm){ var q=+mm[1]; parsed.push({qty:q,dateStr:mm[2].trim()}); sumKnown+=q; }
+          else { parsed.push({qty:null,dateStr:seg}); unknown++; }
+        });
+        if(unknown>0){ var rem=Math.max(0,totalQty-sumKnown)/unknown; parsed.forEach(function(b){ if(b.qty===null) b.qty=rem; }); }
+        parsed.forEach(function(b){ push(b.qty, b.dateStr); });
+      });
+      if(any) visits.push(base);
+    }
+    return { batches:batches, sospechosos:sospechosos, visits:visits, skus:skuName };
+  };
+
   /* ───────── padrón de cada mes ───────── */
   /* Descarga los padrones configurados en site-config.js (links.padrones): cada archivo vale para SU mes (el de octubre es octubre,
      el de noviembre es noviembre). Devuelve {snaps:[{mes,nombre,data,mod,fallback}] ordenados por mes, errors:[texto]}. */

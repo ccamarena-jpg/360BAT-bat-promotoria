@@ -33,7 +33,10 @@ window.SITE = {
     padrones: [
       { mes: '2026-10', nombre: 'Octubre 2026',   url: 'https://ttauditperu-my.sharepoint.com/personal/acastro_ttauditperu_onmicrosoft_com/Documents/MATHIAS/PADRONES/Propuesta%20Padron%20Promotoria%20Octubre%202026%20VF.xlsx' },
       { mes: '2026-11', nombre: 'Noviembre 2026', url: 'https://ttauditperu-my.sharepoint.com/:x:/g/personal/acastro_ttauditperu_onmicrosoft_com/IQBafj3WZ5W-SaXpP-jh7CT2ATS-Sf6ZRK8q7BDx9U-qN7c?e=uyxz7h' }
-    ]
+    ],
+    // Conteos: 582-CONTEO STOCK - VUSE Y VELO.xlsx. TODO: falta el link para conexión en vivo con SharePoint
+    // (pídele a Claude que lo agregue aquí en cuanto lo compartan) — mientras tanto, carga manual en la vista.
+    conteo: ''
   },
   vistas: [
     { id: 'padron',     seccion: 'Promotoría', icono: '🗂️', titulo: 'Padrón',
@@ -50,6 +53,9 @@ window.SITE = {
       src: 'materiales.html' },
     { id: 'cobertura',  seccion: 'Promotoría', icono: '🧭', titulo: 'Cobertura y calendario',
       sub: 'Cruza el padrón (día y frecuencia Q1/Q2) con Información General: cobertura por promotor, tiendas no cubiertas con motivo y programación semanal por distrito.',
-      src: 'cobertura.html' }
+      src: 'cobertura.html' },
+    { id: 'conteos',    seccion: 'Promotoría', icono: '🧮', titulo: 'Conteo VUSE/VELO',
+      sub: 'Unidades de VUSE y VELO encontradas por SKU en cada tienda y su fecha de vencimiento, reportadas por los promotores.',
+      src: 'conteos.html' }
   ]
 };
