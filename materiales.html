@@ -768,6 +768,7 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
       rows.slice(0,300).map(function(r){ return '<tr><td>'+esc(matLabel(r.id))+'</td><td>'+esc(r.cadena)+'</td><td class="mono">'+esc(r.store)+'</td><td>'+esc(r.tienda)+'</td><td>'+esc(r.promotor)+'</td><td class="mono">'+ymd(r.fecha)+'</td></tr>'; }).join("")+'</tbody></table>'+
       (rows.length>300?'<div class="empty">Se muestran 300 de '+rows.length+'. El Excel baja todas.</div>':'');
   }
+  var sortKeyProm = "no", sortDirProm = -1;
   function renderPromotores(){
     $("promCount").textContent = lastProm.length.toLocaleString("es-PE");
     var alerta = lastProm.filter(function(p){ return p.visitas>=ALERTA_MIN_VISITAS && p.pctNo>=ALERTA_MIN_PCT; });
@@ -775,12 +776,27 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
       '<div class="alert-box">⚠️<div><b>'+alerta.length+' promotor(es) visitan la tienda y no implementan el material</b> (≥'+ALERTA_MIN_VISITAS+' tienda×material visitadas en el periodo y ≥'+ALERTA_MIN_PCT+'% sin implementar):'+
       '<ul>'+alerta.map(function(p){ return '<li><b>'+esc(p.promotor)+'</b> ('+esc(p.cadenas)+') — <a class="cnt" data-kind="prom" data-m="'+esc(p.promotor)+'" title="Ver las tiendas">'+p.no+' de '+p.visitas+'</a> sin implementar ('+p.pctNo.toFixed(1)+'%)</li>'; }).join("")+
       '</ul></div></div>';
-    $("tblProm").innerHTML = !lastProm.length ? '<div class="empty">No hay registros con los filtros actuales.</div>' :
-      '<table><thead><tr><th>Promotor</th><th>Cadena(s)</th><th class="num">Materiales</th><th class="num">Tienda×material</th><th class="num">Implementadas</th><th class="num">No implementadas</th><th class="num">% sin implementar</th></tr></thead><tbody>'+
-      lastProm.map(function(p){
+    // la fila de totales (si la hay) nunca entra al sort: se ordenan solo las filas de promotor y el total se agrega después, fijo al final
+    var rows = lastProm.slice().sort(function(a,b){
+      var x=a[sortKeyProm], y=b[sortKeyProm];
+      if(typeof x==="string") return sortDirProm*x.localeCompare(y) || a.promotor.localeCompare(b.promotor);
+      return sortDirProm*(x-y) || b.no-a.no;
+    });
+    var cols = [["promotor","Promotor",0],["cadenas","Cadena(s)",0],["materiales","Materiales",1],["visitas","Tienda×material",1],["ok","Implementadas",1],["no","No implementadas",1],["pctNo","% sin implementar",1]];
+    $("tblProm").innerHTML = !rows.length ? '<div class="empty">No hay registros con los filtros actuales.</div>' :
+      '<table><thead><tr>'+cols.map(function(c){
+        return '<th class="sortable'+(c[2]?' num':'')+'" data-k="'+c[0]+'">'+c[1]+(sortKeyProm===c[0]?(sortDirProm<0?" ▾":" ▴"):"")+'</th>'; }).join("")+'</tr></thead><tbody>'+
+      rows.map(function(p){
         var flag = p.visitas>=ALERTA_MIN_VISITAS && p.pctNo>=ALERTA_MIN_PCT;
         return '<tr'+(flag?' class="crit"':'')+'><td>'+esc(p.promotor)+(flag?' ⚠️':'')+'</td><td>'+esc(p.cadenas)+'</td><td class="num mono">'+p.materiales+'</td><td class="num mono">'+p.visitas+'</td><td class="num mono">'+p.ok+'</td><td class="num mono"><a class="cnt" data-kind="prom" data-m="'+esc(p.promotor)+'" title="Ver las tiendas">'+p.no+'</a></td><td class="num mono"><span class="pill '+(p.pctNo>=ALERTA_MIN_PCT?'crit':p.pctNo>=10?'warn':'ok')+'">'+p.pctNo.toFixed(1)+'%</span></td></tr>';
       }).join("")+'</tbody></table>';
+    [].forEach.call($("tblProm").querySelectorAll("th.sortable"), function(th){
+      th.addEventListener("click", function(){
+        var k=th.getAttribute("data-k");
+        if(sortKeyProm===k) sortDirProm=-sortDirProm; else { sortKeyProm=k; sortDirProm = (k==="promotor"||k==="cadenas") ? 1 : -1; }
+        renderPromotores();
+      });
+    });
   }
   $("promDown").addEventListener("click",function(){
     if(!lastProm.length){ setStatus("No hay datos de promotores para descargar con los filtros actuales.","err"); return; }
