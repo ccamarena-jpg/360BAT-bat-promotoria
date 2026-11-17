@@ -34,9 +34,8 @@ window.SITE = {
       { mes: '2026-10', nombre: 'Octubre 2026',   url: 'https://ttauditperu-my.sharepoint.com/personal/acastro_ttauditperu_onmicrosoft_com/Documents/MATHIAS/PADRONES/Propuesta%20Padron%20Promotoria%20Octubre%202026%20VF.xlsx' },
       { mes: '2026-11', nombre: 'Noviembre 2026', url: 'https://ttauditperu-my.sharepoint.com/:x:/g/personal/acastro_ttauditperu_onmicrosoft_com/IQBafj3WZ5W-SaXpP-jh7CT2ATS-Sf6ZRK8q7BDx9U-qN7c?e=uyxz7h' }
     ],
-    // Conteos: 582-CONTEO STOCK - VUSE Y VELO.xlsx. TODO: falta el link para conexión en vivo con SharePoint
-    // (pídele a Claude que lo agregue aquí en cuanto lo compartan) — mientras tanto, carga manual en la vista.
-    conteo: ''
+    // Conteos: 582-CONTEO STOCK - VUSE Y VELO.xlsx
+    conteo: 'https://ttauditperu-my.sharepoint.com/:x:/g/personal/acastro_ttauditperu_onmicrosoft_com/IQBW4iX4l6HLT7KzLjRQGErsAQLn1Bt7PbUO-AROtQQMTec?e=gaAI0U'
   },
   vistas: [
     { id: 'padron',     seccion: 'Promotoría', icono: '🗂️', titulo: 'Padrón',
