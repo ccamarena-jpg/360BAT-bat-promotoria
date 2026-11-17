@@ -27,9 +27,12 @@ window.SITE = {
     // Padrón de cada mes. Cada archivo vale para SU mes: el de octubre es octubre y el de noviembre es noviembre. Todas las vistas los usan:
     //  · Padrón: el del mes en curso (o el más reciente) · Histórico: compara meses · Cobertura y Radar: cada semana usa el padrón de su mes.
     // Cada mes nuevo: sumar una línea con la ruta del Excel (pestaña «BBDD <mes>»). Se puede agregar `alterno:` (link de respaldo) si hiciera falta.
+    // Noviembre (2026-11-17): la usuaria pidió usar SIEMPRE este link como base del padrón — es el archivo que
+    // mantienen actualizado en SharePoint (aunque el nombre del archivo todavía diga "Octubre 2026 ACTUALIZADO",
+    // adentro trae la pestaña «BBDD NOVIEMBRE», que es la que se lee). Reemplaza el link anterior ("...USAR.xlsx").
     padrones: [
       { mes: '2026-10', nombre: 'Octubre 2026',   url: 'https://ttauditperu-my.sharepoint.com/personal/acastro_ttauditperu_onmicrosoft_com/Documents/MATHIAS/PADRONES/Propuesta%20Padron%20Promotoria%20Octubre%202026%20VF.xlsx' },
-      { mes: '2026-11', nombre: 'Noviembre 2026', url: 'https://ttauditperu-my.sharepoint.com/personal/acastro_ttauditperu_onmicrosoft_com/Documents/MATHIAS/PADRONES/Propuesta%20Padron%20Promotoria%20Noviembre%202026%20USAR.xlsx' }
+      { mes: '2026-11', nombre: 'Noviembre 2026', url: 'https://ttauditperu-my.sharepoint.com/:x:/g/personal/acastro_ttauditperu_onmicrosoft_com/IQBafj3WZ5W-SaXpP-jh7CT2ATS-Sf6ZRK8q7BDx9U-qN7c?e=uyxz7h' }
     ]
   },
   vistas: [
