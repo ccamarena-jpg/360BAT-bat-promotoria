@@ -148,17 +148,28 @@ footer{font-size:12px; color:var(--text-muted); border-top:1px solid var(--borde
 
   <section class="block" id="avanceSection">
     <div class="sec-head"><h2>🎯 Avance de conteo por promotor <span class="chip" id="avanceCount"></span></h2>
-      <button class="btn ghost" id="pendPdf" type="button">⬇ PDF de tiendas pendientes</button></div>
-    <p class="sub">Tiendas del padrón del mes que ya enviaron conteo (al menos 1 SKU) frente a las que aún no. El PDF lista, por promotor y por día de visita, las tiendas sin conteo; respeta los filtros de arriba (mes, cadena, zona y promotor).</p>
-    <div class="chart-card"><div class="chart-wrap" id="avanceWrap" style="height:280px"><canvas id="chartAvance"></canvas></div>
-      <div class="empty" id="avanceMsg" hidden></div></div>
+      <span><button class="btn ghost" id="avanceXls" type="button">⬇ Excel</button> <button class="btn ghost" id="pendPdf" type="button">⬇ PDF de tiendas pendientes</button></span></div>
+    <p class="sub">Tiendas del padrón del mes que ya enviaron conteo (al menos 1 SKU) frente a las que aún no. Clic en el número de "Sin conteo" para ver cuáles son. Semáforo: verde ≥ 90%, ámbar ≥ 70%, rojo por debajo. El PDF lista, por promotor y por día de visita, las tiendas sin conteo; respeta los filtros de arriba (mes, cadena, zona y promotor).</p>
+    <div class="table-wrap" id="tblAvance"></div>
+    <div id="avanceDet"></div>
+  </section>
+
+  <section class="block" id="semSection">
+    <div class="sec-head"><h2>📈 Avance semanal del conteo</h2><button class="btn ghost" id="semXls" type="button">⬇ Excel</button></div>
+    <p class="sub">Cuántas tiendas del padrón van teniendo conteo semana a semana (cada tienda se cuenta la semana de su primer conteo del mes). La línea punteada es la meta: 100% del padrón.</p>
+    <div class="chart-grid">
+      <div class="chart-card"><h3>Tiendas con conteo acumuladas (% del padrón)</h3><div class="chart-wrap"><canvas id="chartAvSem"></canvas></div></div>
+      <div class="chart-card"><h3>Por semana</h3><div id="tblSemana"></div></div>
+    </div>
+    <h3 style="margin:16px 0 6px;font-size:14px">Avance acumulado por cadena</h3>
+    <p class="sub" style="margin-bottom:8px">Cada celda: % acumulado de las tiendas de esa cadena con conteo al cierre de la semana (y cuántas son). Más azul = más avance.</p>
+    <div class="table-wrap" id="tblSemCad"></div>
   </section>
 
   <section class="block">
-    <h2>📈 Avance semanal por categoría</h2>
-    <p class="sub">Unidades contadas (no sospechosas) por semana del conteo, VUSE vs VELO.</p>
+    <h2>📊 Unidades por cadena y SKU</h2>
+    <p class="sub">Unidades contadas (no sospechosas) con los filtros actuales.</p>
     <div class="chart-grid">
-      <div class="chart-card"><h3>Unidades por semana</h3><div class="chart-wrap"><canvas id="chartSemana"></canvas></div></div>
       <div class="chart-card"><h3>Unidades por cadena</h3><div class="chart-wrap"><canvas id="chartCadena"></canvas></div></div>
       <div class="chart-card"><h3>Top SKU por unidades</h3><div class="chart-wrap"><canvas id="chartSku"></canvas></div></div>
       <div class="chart-card"><h3>PDVs con conteo vs sin conteo</h3><div class="chart-wrap"><canvas id="chartCobertura"></canvas></div></div>
@@ -307,7 +318,7 @@ footer{font-size:12px; color:var(--text-muted); border-top:1px solid var(--borde
       var snap=BAT.padFor(PAD.snaps, new Date(+mesSel.split("-")[0], +mesSel.split("-")[1]-1, 1));
       if(snap){
         var rows=snap.data.rows;
-        if(selCad) rows=rows.filter(function(r){ return selCad.has(r.cadena); });
+        if(selCad) rows=rows.filter(function(r){ return selCad.has(cadPad(r)); });
         if(zonaSel) rows=rows.filter(function(r){ return r.zona===zonaSel; });
         universo=rows.length;
       }
@@ -324,14 +335,6 @@ footer{font-size:12px; color:var(--text-muted); border-top:1px solid var(--borde
 
     destroyCharts();
     var accent=cssv("--accent"), ok=cssv("--ok"), warn=cssv("--warn"), crit=cssv("--crit"), border=cssv("--surface"), grid=cssv("--border");
-
-    // tendencia semanal VUSE vs VELO
-    var semMap={};
-    batches.forEach(function(b){ var k=ymd(mondayOf(b.fecha)); var s=semMap[k]||(semMap[k]={VUSE:0,VELO:0}); var c=categoriaDe(b.sku); if(s[c]!==undefined) s[c]+=b.qty; });
-    var semKeys=Object.keys(semMap).sort();
-    mkChart("chartSemana",{type:"bar",data:{labels:semKeys.map(function(k){ var d=new Date(k); return d.getDate()+"/"+(d.getMonth()+1); }),
-      datasets:[{label:"VUSE",data:semKeys.map(function(k){return semMap[k].VUSE;}),backgroundColor:accent},{label:"VELO",data:semKeys.map(function(k){return semMap[k].VELO;}),backgroundColor:warn}]},
-      options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,grid:{color:grid}},x:{grid:{display:false}}},plugins:{legend:{position:"top"}}}});
 
     // unidades por cadena
     var cadMap={}; batches.forEach(function(b){ cadMap[b.cadena]=(cadMap[b.cadena]||0)+b.qty; });
@@ -354,6 +357,7 @@ footer{font-size:12px; color:var(--text-muted); border-top:1px solid var(--borde
     }
 
     renderAvance();
+    renderSemanal();
     renderVenc(batches);
     lastDet=batches; renderDetalle();
     renderSosp();
@@ -364,41 +368,114 @@ footer{font-size:12px; color:var(--text-muted); border-top:1px solid var(--borde
 
   /* ───────── avance de conteo por promotor + PDF de pendientes ───────── */
   // Universo = padrón del mes (promotor/día/frecuencia vigentes = último trío de columnas). "Con conteo" = la tienda tiene alguna visita con conteo ese mes.
-  function avancePorPromotor(){
+  function cadPad(r){ return BAT.cadenaDe(r.estacion||r.nombre); }   // misma cadena "corta" que usan los conteos (TAMBO, OXXO…), no la razón social del padrón
+  // Universo del mes = tiendas del padrón (con los filtros de cadena/zona/promotor) y su primer/último conteo del mes.
+  function universo(){
     var mes=$("fMes").value;
     if(!DATA || !mes || !PAD || !PAD.snaps || !PAD.snaps.length) return null;
     var snap=BAT.padFor(PAD.snaps, new Date(+mes.split("-")[0], +mes.split("-")[1]-1, 1)); if(!snap) return null;
     var ti=snap.data.labels.length-1, zona=$("fZona").value;
     var promSet=selProm? new Set(Array.from(selProm).map(norm)) : null;
-    var done={}; DATA.visits.forEach(function(v){ if(mesKeyOf(v.fecha)===mes) done[v.store]=1; });
-    var by={};
+    var first={}, last={};
+    DATA.visits.forEach(function(v){ if(mesKeyOf(v.fecha)!==mes) return; if(!first[v.store]||v.fecha<first[v.store]) first[v.store]=v.fecha; if(!last[v.store]||v.fecha>last[v.store]) last[v.store]=v.fecha; });
+    var items=[];
     snap.data.rows.forEach(function(r){
-      var t=r.t[ti], p=(t && t.promotor) || "(SIN PROMOTOR)";
-      if(selCad && !selCad.has(r.cadena)) return;
+      var t=r.t[ti], p=(t && t.promotor) || "(SIN PROMOTOR)", cad=cadPad(r);
+      if(selCad && !selCad.has(cad)) return;
       if(zona && r.zona!==zona) return;
       if(promSet && !promSet.has(norm(p))) return;
-      var g=by[p]||(by[p]={name:p,total:0,done:0,pend:[]});
-      g.total++;
-      if(done[r.store]) g.done++; else g.pend.push({store:r.store, tienda:r.estacion||r.nombre||r.store, dia:t?t.dia:"", frec:t?t.frec:""});
+      items.push({r:r,t:t,prom:p,cad:cad,first:first[r.store]||null,last:last[r.store]||null});
+    });
+    return {mes:mes, items:items};
+  }
+  function avancePorPromotor(){
+    var U=universo(); if(!U) return null;
+    var by={};
+    U.items.forEach(function(it){
+      var g=by[it.prom]||(by[it.prom]={name:it.prom,total:0,done:0,pend:[],cads:{},ult:null});
+      g.total++; g.cads[it.cad]=1;
+      if(it.first){ g.done++; if(!g.ult || it.last>g.ult) g.ult=it.last; }
+      else g.pend.push({store:it.r.store, tienda:it.r.estacion||it.r.nombre||it.r.store, cadena:it.cad, distrito:it.r.distrito, dia:it.t?it.t.dia:"", frec:it.t?it.t.frec:""});
     });
     return Object.keys(by).map(function(k){ return by[k]; }).sort(function(a,b){ return pct(b.done,b.total)-pct(a.done,a.total) || a.name.localeCompare(b.name); });
   }
-  function renderAvance(){
-    var g=avancePorPromotor(), wrap=$("avanceWrap"), msg=$("avanceMsg");
-    $("pendPdf").disabled = !g;
-    if(!g){ wrap.hidden=true; msg.hidden=false; $("avanceCount").textContent="";
-      msg.textContent="Para ver el avance por promotor hace falta el padrón del mes. Conéctate con SharePoint (botón de arriba) para cargarlo."; return; }
-    wrap.hidden=false; msg.hidden=true;
-    var tot=g.reduce(function(a,x){return a+x.total;},0), dn=g.reduce(function(a,x){return a+x.done;},0);
-    $("avanceCount").textContent = dn.toLocaleString("es-PE")+" de "+tot.toLocaleString("es-PE")+" tiendas · "+pct(dn,tot).toFixed(1)+"%";
-    wrap.style.height = Math.max(200, g.length*28+70)+"px";
-    mkChart("chartAvance",{type:"bar",
-      data:{labels:g.map(function(x){ return x.name+" — "+pct(x.done,x.total).toFixed(0)+"% ("+x.done+"/"+x.total+")"; }),
-        datasets:[{label:"Con conteo",data:g.map(function(x){return x.done;}),backgroundColor:cssv("--ok")},
-                  {label:"Sin conteo",data:g.map(function(x){return x.total-x.done;}),backgroundColor:cssv("--crit")}]},
-      options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"top"}},
-        scales:{x:{stacked:true,beginAtZero:true,grid:{color:cssv("--border")},title:{display:true,text:"Tiendas"}},y:{stacked:true,grid:{display:false}}}}});
+  function semAv(p){ return p>=90?"ok":p>=70?"warn":"crit"; }
+  /* ───────── avance semanal: acumulado (A) y por cadena (B) ───────── */
+  var semCache=null;
+  function semanal(){
+    var U=universo(); if(!U) return null;
+    var y=+U.mes.split("-")[0], m=+U.mes.split("-")[1]-1, today=new Date();
+    var w0=mondayOf(new Date(y,m,1)), lastDay=new Date(y,m+1,0), wEnd=mondayOf(lastDay<today? lastDay : today);
+    U.items.forEach(function(it){ if(it.first){ var w=mondayOf(it.first); if(w>wEnd) wEnd=w; } });
+    var weeks=[], idx={};
+    for(var d=w0; d<=wEnd; d=BAT.addDays(d,7)){ idx[ymd(d)]=weeks.length; weeks.push(d); }
+    var cads={}, tot=new Array(weeks.length).fill(0), total=0;
+    U.items.forEach(function(it){
+      var c=cads[it.cad]||(cads[it.cad]={total:0,news:new Array(weeks.length).fill(0)});
+      c.total++; total++;
+      if(it.first){ var i=idx[ymd(mondayOf(it.first))]; if(i!==undefined){ c.news[i]++; tot[i]++; } }
+    });
+    return {weeks:weeks, cads:cads, news:tot, total:total};
   }
+  function wLabel(d){ return d.getDate()+"/"+(d.getMonth()+1); }
+  function heat(p,txt){ var r=p/100; return '<td class="num mono" style="background:rgba(29,59,120,'+(0.06+0.55*r).toFixed(2)+');color:'+(r>0.55?"#fff":"var(--text)")+'">'+txt+'</td>'; }
+  function renderSemanal(){
+    var S=semanal(); semCache=S; $("semXls").disabled=!S;
+    if(!S){ $("tblSemana").innerHTML='<div class="empty">Hace falta el padrón del mes (conéctate con SharePoint).</div>'; $("tblSemCad").innerHTML='<div class="empty">Hace falta el padrón del mes.</div>'; return; }
+    var acc=0, cum=S.news.map(function(n){ acc+=n; return acc; });
+    var cl=S.weeks.map(wLabel);
+    mkChart("chartAvSem",{type:"line",
+      data:{labels:cl,datasets:[
+        {label:"Acumulado",data:cum.map(function(v){return pct(v,S.total);}),borderColor:cssv("--accent"),backgroundColor:cssv("--accent-soft"),fill:true,tension:.25,pointRadius:4,pointBackgroundColor:cssv("--accent")},
+        {label:"Meta (100%)",data:cl.map(function(){return 100;}),borderColor:cssv("--ok"),borderDash:[6,5],pointRadius:0,fill:false}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"top"},tooltip:{callbacks:{label:function(c){ return c.datasetIndex===0? c.parsed.y.toFixed(1)+"% ("+cum[c.dataIndex].toLocaleString("es-PE")+" de "+S.total.toLocaleString("es-PE")+" tiendas)" : "Meta 100%"; }}}},
+        scales:{y:{min:0,max:100,ticks:{callback:function(v){return v+"%";}},grid:{color:cssv("--border")}},x:{grid:{display:false},title:{display:true,text:"Semana del (lunes)"}}}}});
+    $("tblSemana").innerHTML='<div class="table-wrap" style="max-height:280px;border:none;box-shadow:none"><table><thead><tr><th>Semana del</th><th class="num">Nuevas con conteo</th><th class="num">Acumulado</th><th class="num">% acum.</th><th class="num">Pendientes</th></tr></thead><tbody>'+
+      S.weeks.map(function(w,i){ var p=pct(cum[i],S.total);
+        return '<tr><td class="mono">'+wLabel(w)+'</td><td class="num mono">'+S.news[i].toLocaleString("es-PE")+'</td><td class="num mono">'+cum[i].toLocaleString("es-PE")+'</td><td class="num"><span class="pill '+semAv(p)+'">'+p.toFixed(1)+'%</span></td><td class="num mono">'+(S.total-cum[i]).toLocaleString("es-PE")+'</td></tr>'; }).join("")+'</tbody></table></div>';
+    // B: cadena x semana (acumulado)
+    var names=Object.keys(S.cads).sort(function(a,b){ return S.cads[b].total-S.cads[a].total; });
+    function cell(c,i){ var a=0; for(var k=0;k<=i;k++) a+=c.news[k]; var p=pct(a,c.total); return heat(p, p.toFixed(0)+'%<div style="font-size:10.5px;opacity:.8">'+a+'</div>'); }
+    var last=cum.length-1;
+    $("tblSemCad").innerHTML='<table><thead><tr><th>Cadena</th><th class="num">Tiendas en padrón</th>'+S.weeks.map(function(w){ return '<th class="num">Sem. '+wLabel(w)+'</th>'; }).join("")+'<th class="num">Pendientes</th><th>Avance</th></tr></thead><tbody>'+
+      names.map(function(n){ var c=S.cads[n], done=c.news.reduce(function(a,b){return a+b;},0), p=pct(done,c.total);
+        return '<tr><td>'+esc(n)+'</td><td class="num mono">'+c.total+'</td>'+S.weeks.map(function(w,i){ return cell(c,i); }).join("")+'<td class="num mono">'+(c.total-done)+'</td><td><span class="pill '+semAv(p)+'">'+p.toFixed(1)+'%</span></td></tr>'; }).join("")+
+      '<tr class="tot"><td>Total</td><td class="num mono">'+S.total.toLocaleString("es-PE")+'</td>'+cum.map(function(a){ var p=pct(a,S.total); return heat(p,'<b>'+p.toFixed(0)+'%</b><div style="font-size:10.5px;opacity:.8">'+a+'</div>'); }).join("")+'<td class="num mono">'+(S.total-cum[last]).toLocaleString("es-PE")+'</td><td><span class="pill '+semAv(pct(cum[last],S.total))+'">'+pct(cum[last],S.total).toFixed(1)+'%</span></td></tr></tbody></table>';
+  }
+  $("semXls").addEventListener("click",function(){
+    var S=semCache; if(!S) return; var rows=[];
+    Object.keys(S.cads).sort().forEach(function(n){ var c=S.cads[n], a=0; S.weeks.forEach(function(w,i){ a+=c.news[i]; rows.push({CADENA:n,SEMANA_DEL:ymd(w),TIENDAS_PADRON:c.total,NUEVAS_CON_CONTEO:c.news[i],ACUMULADO:a,AVANCE_ACUM_PCT:pct(a,c.total)}); }); });
+    xls(rows,"conteo-avance-semanal-"+$("fMes").value+".xlsx","AVANCE SEMANAL");
+  });
+
+  var avCache=[];
+  function renderAvance(){
+    var g=avancePorPromotor(), host=$("tblAvance");
+    $("pendPdf").disabled=!g; $("avanceXls").disabled=!g; $("avanceDet").innerHTML="";
+    if(!g){ avCache=[]; $("avanceCount").textContent=""; host.innerHTML='<div class="empty">Para ver el avance por promotor hace falta el padrón del mes. Conéctate con SharePoint (botón de arriba) para cargarlo.</div>'; return; }
+    g.sort(function(a,b){ return pct(a.done,a.total)-pct(b.done,b.total) || a.name.localeCompare(b.name); });   // los más atrasados primero
+    avCache=g;
+    var T=g.reduce(function(a,x){return a+x.total;},0), D=g.reduce(function(a,x){return a+x.done;},0);
+    $("avanceCount").textContent = D.toLocaleString("es-PE")+" de "+T.toLocaleString("es-PE")+" tiendas · "+pct(D,T).toFixed(1)+"%";
+    host.innerHTML='<table><thead><tr><th>Promotor</th><th>Cadenas</th><th class="num">Tiendas en padrón</th><th class="num">Con conteo</th><th class="num">Sin conteo</th><th>% de avance</th><th>Último conteo</th></tr></thead><tbody>'+
+      g.map(function(x,i){ var p=pct(x.done,x.total), sin=x.total-x.done;
+        return '<tr><td>'+esc(x.name)+'</td><td style="font-size:12px;color:var(--text-muted)">'+esc(Object.keys(x.cads).sort().join(", "))+'</td><td class="num mono">'+x.total+'</td><td class="num mono">'+x.done+'</td>'+
+          '<td class="num mono">'+(sin? '<a class="cnt" href="#" data-i="'+i+'" title="Ver las tiendas sin conteo" style="color:var(--crit);font-weight:700">'+sin+'</a>' : '0')+'</td>'+
+          '<td><span class="bar" style="display:inline-block;height:8px;border-radius:4px;vertical-align:middle;margin-right:6px;width:'+Math.round(p*0.6)+'px;background:var(--'+semAv(p)+')"></span><span class="pill '+semAv(p)+'">'+p.toFixed(1)+'%</span></td>'+
+          '<td class="mono">'+(x.ult? ymd(x.ult) : "—")+'</td></tr>'; }).join("")+
+      '<tr class="tot"><td>Total</td><td></td><td class="num mono">'+T.toLocaleString("es-PE")+'</td><td class="num mono">'+D.toLocaleString("es-PE")+'</td><td class="num mono">'+(T-D).toLocaleString("es-PE")+'</td><td><span class="pill '+semAv(pct(D,T))+'">'+pct(D,T).toFixed(1)+'%</span></td><td></td></tr></tbody></table>';
+    [].forEach.call(host.querySelectorAll("a.cnt"),function(a){ a.addEventListener("click",function(e){ e.preventDefault(); showSinConteo(+a.getAttribute("data-i")); }); });
+  }
+  function showSinConteo(i){
+    var x=avCache[i]; if(!x) return;
+    var rows=x.pend.slice().sort(function(a,b){ return (DIA_ORD.indexOf(a.dia)+1||9)-(DIA_ORD.indexOf(b.dia)+1||9) || a.tienda.localeCompare(b.tienda); });
+    $("avanceDet").innerHTML='<h3 style="margin:14px 0 6px;font-size:14px">Tiendas sin conteo · '+esc(x.name)+' <span class="chip">'+rows.length+'</span></h3><div class="table-wrap" style="max-height:340px"><table><thead><tr><th>Día</th><th>Tienda</th><th>Cadena</th><th>Distrito</th><th>Frecuencia</th><th class="num">Código</th></tr></thead><tbody>'+
+      rows.map(function(r){ return '<tr><td>'+esc(DIA_TXT[r.dia]||"—")+'</td><td>'+esc(r.tienda)+'</td><td>'+esc(r.cadena)+'</td><td>'+esc(r.distrito)+'</td><td>'+esc(r.frec||"—")+'</td><td class="num mono">'+esc(r.store)+'</td></tr>'; }).join("")+'</tbody></table></div>';
+    $("avanceDet").scrollIntoView({behavior:"smooth",block:"nearest"}); reportHeight();
+  }
+  $("avanceXls").addEventListener("click",function(){
+    xls(avCache.map(function(x){ return {PROMOTOR:x.name,CADENAS:Object.keys(x.cads).sort().join(", "),TIENDAS_PADRON:x.total,CON_CONTEO:x.done,SIN_CONTEO:x.total-x.done,AVANCE_PCT:pct(x.done,x.total),ULTIMO_CONTEO:x.ult?ymd(x.ult):""}; }),"conteo-avance-promotor-"+$("fMes").value+".xlsx","AVANCE POR PROMOTOR");
+  });
   var DIA_ORD=["lunes","martes","miercoles","jueves","viernes","sabado","domingo"], DIA_TXT={lunes:"LUNES",martes:"MARTES",miercoles:"MIÉRCOLES",jueves:"JUEVES",viernes:"VIERNES",sabado:"SÁBADO",domingo:"DOMINGO"};
   $("pendPdf").addEventListener("click",function(){
     var g=avancePorPromotor();
