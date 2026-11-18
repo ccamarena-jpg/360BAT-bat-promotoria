@@ -35,7 +35,9 @@ window.SITE = {
       { mes: '2026-11', nombre: 'Noviembre 2026', url: 'https://ttauditperu-my.sharepoint.com/:x:/g/personal/acastro_ttauditperu_onmicrosoft_com/IQBafj3WZ5W-SaXpP-jh7CT2ATS-Sf6ZRK8q7BDx9U-qN7c?e=uyxz7h' }
     ],
     // Conteos: 582-CONTEO STOCK - VUSE Y VELO.xlsx
-    conteo: 'https://ttauditperu-my.sharepoint.com/:x:/g/personal/acastro_ttauditperu_onmicrosoft_com/IQBW4iX4l6HLT7KzLjRQGErsAQLn1Bt7PbUO-AROtQQMTec?e=gaAI0U'
+    conteo: 'https://ttauditperu-my.sharepoint.com/:x:/g/personal/acastro_ttauditperu_onmicrosoft_com/IQBW4iX4l6HLT7KzLjRQGErsAQLn1Bt7PbUO-AROtQQMTec?e=gaAI0U',
+    // Quiebres: 582-QUIEBRE DE STOCK.xlsx (TODO: falta el link de SharePoint — pedírselo a la usuaria, mientras tanto solo carga manual)
+    quiebre: ''
   },
   vistas: [
     { id: 'padron',     seccion: 'Promotoría', icono: '🗂️', titulo: 'Padrón',
@@ -55,6 +57,9 @@ window.SITE = {
       src: 'cobertura.html' },
     { id: 'conteos',    seccion: 'Promotoría', icono: '🧮', titulo: 'Conteo VUSE/VELO',
       sub: 'Unidades de VUSE y VELO encontradas por SKU en cada tienda y su fecha de vencimiento, reportadas por los promotores.',
-      src: 'conteos.html' }
+      src: 'conteos.html' },
+    { id: 'quiebres',   seccion: 'Promotoría', icono: '📉', titulo: 'Quiebres de stock',
+      sub: 'Tiendas que no cumplen el stock mínimo de VUSE, VELO y FMC, con motivo reportado por el promotor.',
+      src: 'quiebres.html' }
   ]
 };

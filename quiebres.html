@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quiebres de stock · BAT 360</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#f4f6fa; --surface:#FFFFFF; --surface-2:#f2f5fa; --text:#1b2a47; --text-muted:#6c7a92; --border:#dde4ee;
+  --accent:#1d3b78; --accent-soft:#e2ecfb; --ok:#1f9d57; --ok-bg:#e0f5e8; --warn:#a9760a; --warn-bg:#fcf0d6;
+  --crit:#d6453d; --crit-bg:#fbe3e1; --pend:#b7c0cf;
+  --shadow: 0 1px 3px rgba(21,38,74,.06), 0 4px 14px rgba(21,38,74,.05);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#16181A; --surface:#1F2224; --surface-2:#26292B; --text:#EDEBE5; --text-muted:#9C9A92; --border:#33363A;
+    --accent:#7FB4D4; --accent-soft:#20343E; --ok:#6FCB99; --ok-bg:#173425; --warn:#E3B15C; --warn-bg:#3A2C10;
+    --crit:#EF8A83; --crit-bg:#3D1E1C; --pend:#5b6270; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#16181A; --surface:#1F2224; --surface-2:#26292B; --text:#EDEBE5; --text-muted:#9C9A92; --border:#33363A;
+  --accent:#7FB4D4; --accent-soft:#20343E; --ok:#6FCB99; --ok-bg:#173425; --warn:#E3B15C; --warn-bg:#3A2C10;
+  --crit:#EF8A83; --crit-bg:#3D1E1C; --pend:#5b6270; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box;}
+body{background:var(--bg); color:var(--text); font-family:"IBM Plex Sans",'Segoe UI',system-ui,sans-serif;
+  padding-inline:18px; padding-block:14px 28px; max-width:1180px; margin:0 auto;}
+.mono{font-family:"IBM Plex Mono", ui-monospace, monospace; font-variant-numeric:tabular-nums;}
+h1,h2,h3{text-wrap:balance; margin:0;}
+a{color:var(--accent);}
+header.top{display:flex; flex-wrap:wrap; gap:16px 24px; justify-content:space-between; align-items:flex-start;
+  padding-bottom:18px; border-bottom:1px solid var(--border); margin-bottom:18px;}
+.brand{display:flex; flex-direction:column; gap:4px; min-width:220px;}
+.brand .eyebrow{font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-muted); font-weight:600;}
+.brand h1{font-size:26px; font-weight:700;}
+.brand p{margin:2px 0 0; color:var(--text-muted); font-size:13.5px; max-width:52ch;}
+.upload-panel{display:flex; flex-direction:column; gap:8px; background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; padding:14px 16px; box-shadow:var(--shadow); min-width:280px; flex:1 1 320px; max-width:460px;}
+.upload-row{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+.btn{background:var(--accent); color:var(--surface); border:none; border-radius:8px; padding:9px 14px;
+  font-family:inherit; font-weight:600; font-size:13.5px; cursor:pointer;}
+.btn.ghost{background:transparent; color:var(--accent); border:1px solid var(--accent);}
+.btn:hover{filter:brightness(1.06);}
+.file-name{font-size:12.5px; color:var(--text-muted); word-break:break-all;}
+input[type=file]{display:none;}
+.status-line{font-size:12.5px; color:var(--text-muted);}
+.status-line.err{color:var(--crit);} .status-line.ok{color:var(--ok);}
+.empty-banner{display:flex; gap:10px; align-items:center; background:var(--accent-soft); color:var(--accent);
+  border:1px solid var(--accent); border-radius:10px; padding:12px 16px; font-size:13.5px; margin-bottom:20px;}
+.alert-box{display:flex; gap:10px; align-items:flex-start; background:var(--warn-bg); color:var(--text);
+  border:1px solid var(--warn); border-radius:10px; padding:12px 16px; font-size:13px; margin-bottom:16px;}
+.alert-box b{color:var(--warn);}
+.filter-bar{display:flex; flex-wrap:wrap; gap:12px 16px; align-items:flex-end; background:var(--surface);
+  border:1px solid var(--border); border-radius:12px; padding:12px 16px; box-shadow:var(--shadow); margin-bottom:10px;}
+.filter-field{display:flex; flex-direction:column; gap:4px;}
+.filter-field label{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); font-weight:600;}
+.filter-field select, .filter-field input[type=date], .filter-field input[type=search]{font-family:inherit; font-size:13px; padding:7px 10px; border-radius:8px;
+  border:1px solid var(--border); background:var(--bg); color:var(--text); min-width:150px;}
+.filter-hint{font-size:12px; color:var(--text-muted); margin:0 0 16px;}
+.ms{position:relative;}
+.ms-btn{font-family:inherit; font-size:13px; padding:7px 10px; border-radius:8px; border:1px solid var(--border);
+  background:var(--bg); color:var(--text); min-width:200px; text-align:left; cursor:pointer; display:flex; gap:8px; align-items:center;}
+.ms-btn .caret{margin-left:auto; color:var(--text-muted);}
+.ms-panel{position:absolute; z-index:30; top:calc(100% + 4px); left:0; min-width:280px; max-height:320px; overflow:auto;
+  background:var(--surface); border:1px solid var(--border); border-radius:10px; box-shadow:var(--shadow); padding:6px;}
+.ms-panel label{display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:6px; font-size:13px; color:var(--text);
+  cursor:pointer; font-weight:500; text-transform:none; letter-spacing:0;}
+.ms-panel label:hover{background:var(--surface-2);}
+.ms-panel .ms-sep{height:1px; background:var(--border); margin:5px 2px;}
+.ms-panel input[type=checkbox]{margin:0; accent-color:var(--accent);}
+.kpi-strip{display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:12px; margin-bottom:22px;}
+.kpi{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; box-shadow:var(--shadow);}
+.kpi .k-label{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); font-weight:600;}
+.kpi .k-value{font-size:26px; font-weight:700; margin-top:4px;}
+.kpi .k-value.crit{color:var(--crit);}
+.kpi .k-sub{font-size:12px; color:var(--text-muted); margin-top:2px;}
+section.block{margin-bottom:26px;}
+section.block > h2, section.block > div > h2{font-size:17px; margin-bottom:4px; display:flex; align-items:center; gap:8px;}
+section.block .sub{font-size:12.5px; color:var(--text-muted); margin:0 0 12px;}
+.chart-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(380px,1fr)); gap:16px;}
+.chart-card{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; box-shadow:var(--shadow);}
+.chart-card h3{font-size:13.5px; font-weight:600; margin-bottom:10px;}
+.chart-wrap{position:relative; height:280px;}
+.chip{font-size:11px; padding:2px 7px; border-radius:999px; background:var(--surface-2); color:var(--text-muted); border:1px solid var(--border);}
+.pill{font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; white-space:nowrap;}
+.pill.ok{background:var(--ok-bg); color:var(--ok);} .pill.warn{background:var(--warn-bg); color:var(--warn);} .pill.crit{background:var(--crit-bg); color:var(--crit);}
+.table-wrap{background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); overflow:auto; max-height:560px;}
+table{border-collapse:collapse; width:100%; font-size:12.8px;}
+th,td{padding:7px 11px; text-align:left; border-bottom:1px solid var(--border); vertical-align:top;}
+th{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); background:var(--surface-2); position:sticky; top:0;}
+td.num, th.num{text-align:right; font-family:"IBM Plex Mono",monospace;}
+td.cq{text-align:center; font-family:"IBM Plex Mono",monospace;}
+tr:last-child td{border-bottom:none;}
+tr.tot td{font-weight:700; background:var(--surface-2); border-top:2px solid var(--border);}
+th.sortable{cursor:pointer; user-select:none;} th.sortable:hover{color:var(--accent);}
+.empty{padding:18px; color:var(--text-muted); font-size:13px;}
+.sec-head{display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; justify-content:space-between; margin-bottom:4px;}
+footer{font-size:12px; color:var(--text-muted); border-top:1px solid var(--border); padding-top:12px; margin-top:24px;}
+[hidden]{display:none !important;}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <span class="eyebrow">BAT 360 · Promotoría</span>
+    <h1>Quiebres de stock</h1>
+    <p>Tiendas que no cumplen el stock mínimo de VUSE, VELO y FMC, con motivo reportado por el promotor. Fuente: <code>582-QUIEBRE DE STOCK.xlsx</code>.</p>
+  </div>
+  <div class="upload-panel">
+    <div class="upload-row" id="msRow" hidden>
+      <button class="btn" id="msConnectBtn" type="button">🔗 Conectar con SharePoint</button>
+      <button class="btn ghost" id="msRefreshBtn" type="button" hidden>↻ Actualizar</button>
+      <span class="file-name" id="msUser"></span>
+    </div>
+    <div class="upload-row">
+      <label class="btn ghost" for="fileInput">📂 Cargar 582-QUIEBRE DE STOCK.xlsx</label>
+      <input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls">
+    </div>
+    <div class="file-name" id="fileName">Sin archivo cargado</div>
+    <div class="file-name" id="modLine"></div>
+    <div class="status-line" id="statusLine"></div>
+  </div>
+</header>
+
+<div class="empty-banner" id="emptyBanner">
+  <span>📉</span>
+  <span>Conecta con SharePoint (o carga el Excel <b>582-QUIEBRE DE STOCK</b>) para ver los quiebres reportados.</span>
+</div>
+
+<div id="app" hidden>
+  <div class="filter-bar">
+    <div class="filter-field"><label for="fMes">Mes</label><select id="fMes"></select></div>
+    <div class="filter-field"><label for="fCat">Categoría</label><select id="fCat"><option value="">Todas</option><option value="FMC">Solo FMC</option><option value="VUSE">Solo VUSE</option><option value="VELO">Solo VELO</option></select></div>
+    <div class="filter-field"><label>Cadena</label><div class="ms" id="msCad"></div></div>
+    <div class="filter-field"><label for="fZona">Zona</label><select id="fZona"><option value="">Todas</option><option>LIMA</option><option>KC</option><option>NKC</option></select></div>
+    <div class="filter-field"><label>Promotor</label><div class="ms" id="msProm"></div></div>
+  </div>
+  <p class="filter-hint" id="filterHint"></p>
+
+  <div class="kpi-strip" id="kpis"></div>
+
+  <section class="block">
+    <h2>📈 Evolución y distribución</h2>
+    <p class="sub">Tasa de quiebre = evaluaciones SKU×tienda que no cumplieron stock mínimo, sobre el total evaluado.</p>
+    <div class="chart-grid">
+      <div class="chart-card"><h3>Tasa de quiebre por semana</h3><div class="chart-wrap"><canvas id="chartSemana"></canvas></div></div>
+      <div class="chart-card"><h3>Quiebres por cadena</h3><div class="chart-wrap"><canvas id="chartCadena"></canvas></div></div>
+      <div class="chart-card"><h3>Top SKU en quiebre</h3><div class="chart-wrap"><canvas id="chartSku"></canvas></div></div>
+      <div class="chart-card"><h3>Motivo del quiebre</h3><div class="chart-wrap"><canvas id="chartMotivo"></canvas></div></div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="sec-head"><h2>🏪 Tiendas más críticas <span class="chip" id="critCount"></span></h2>
+      <button class="btn ghost" id="critDown" type="button">⬇ Excel</button></div>
+    <p class="sub">Tiendas con más quiebres este mes, ordenadas por tasa de quiebre (mínimo 3 evaluaciones).</p>
+    <div class="table-wrap" id="tblCrit"></div>
+  </section>
+
+  <section class="block">
+    <div class="sec-head"><h2>📅 Quiebres por semana — tienda × SKU <span class="chip" id="pivCount"></span></h2>
+      <button class="btn ghost" id="pivDown" type="button">⬇ Excel</button></div>
+    <p class="sub">Por cada tienda y SKU, en qué semanas del mes hubo quiebre (●) y el total de semanas afectadas. Solo se muestran combinaciones con al menos un quiebre.</p>
+    <div class="table-wrap" id="tblPivot"></div>
+  </section>
+
+  <section class="block">
+    <div class="sec-head"><h2>📋 Detalle por tienda y SKU <span class="chip" id="detCount"></span></h2>
+      <button class="btn ghost" id="detDown" type="button">⬇ Excel</button></div>
+    <div class="filter-bar" style="margin-bottom:10px">
+      <div class="filter-field"><label for="dBuscar">Buscar</label><input type="search" id="dBuscar" placeholder="Tienda, código, SKU, promotor, motivo…" style="min-width:260px"></div>
+    </div>
+    <p class="sub" id="detSub"></p>
+    <div class="table-wrap" id="tblDetalle"></div>
+  </section>
+</div>
+
+<footer>
+  <details>
+    <summary style="cursor:pointer;font-weight:600;color:var(--accent)">ℹ️ Cómo se calcula esto</summary>
+    <div style="font-size:12.5px;color:var(--text-muted);line-height:1.6;padding-top:8px;max-width:78ch">
+      <p>Cada visita evalúa, para cada SKU asignado a esa tienda, si <b>cumple el stock mínimo</b> (Sí/No). Un SKU que no se evaluó esa visita (no aplica) no cuenta ni como cumple ni como quiebre.</p>
+      <p><b>Quiebre</b> = esa combinación tienda+SKU+visita NO cumplió el stock mínimo. Cuando hay quiebre, el promotor indica el <b>motivo</b> (Despacho no llegó / Robo en tienda / Otro).</p>
+      <p><b>Tasa de quiebre</b> = quiebres ÷ evaluaciones totales (no sobre el universo de tiendas, sino sobre los SKU realmente evaluados).</p>
+      <p>La tabla de <b>semanas</b> agrupa el mes en SEM1 (días 1–7), SEM2 (8–14), SEM3 (15–21), SEM4 (22–28) y SEM5 (29–31); el TOTAL es la cantidad de semanas con al menos un quiebre para esa tienda+SKU, no una suma de unidades.</p>
+      <p>Los archivos se leen en tu navegador con tu cuenta de Microsoft; no se guardan en la plataforma.</p>
+    </div>
+  </details>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+<script src="shared.js"></script>
+<script>
+(function(){
+  "use strict";
+  var $=function(id){ return document.getElementById(id); };
+  var esc=BAT.esc, norm=BAT.norm, clean=BAT.clean, ymd=BAT.ymd, pad2=BAT.pad2;
+  var MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+  function mesLabel(k){ var p=k.split("-"); return MESES[+p[1]-1]+" "+p[0]; }
+  function mesKeyOf(d){ return d.getFullYear()+"-"+pad2(d.getMonth()+1); }
+  function pct(a,b){ return b? Math.round(a*1000/b)/10 : 0; }
+  function semOf(d){ return Math.min(5, Math.ceil(d.getDate()/7)); }
+  function kpi(l,v,s,cls){ return '<div class="kpi"><div class="k-label">'+esc(l)+'</div><div class="k-value mono'+(cls?" "+cls:"")+'">'+esc(v)+'</div><div class="k-sub">'+esc(s||"")+'</div></div>'; }
+  function categoriaDe(sku){ return /^VUSE/i.test(sku)? "VUSE" : /^VELO/i.test(sku)? "VELO" : "FMC"; }
+  function cssv(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+
+  var DATA=null;          // { checks, quiebres, visits, skus }
+  var PAD=null;           // { snaps } del padrón (opcional, para universo)
+  var msBuild=(function(){
+    return function(host, label, onChange){
+      host.innerHTML='<button type="button" class="ms-btn"><span class="ms-txt"></span><span class="caret">▾</span></button><div class="ms-panel" hidden></div>';
+      var btn=host.querySelector(".ms-btn"), panel=host.querySelector(".ms-panel");
+      btn.addEventListener("click",function(e){ e.stopPropagation(); panel.hidden=!panel.hidden; });
+      document.addEventListener("click",function(e){ if(!host.contains(e.target)) panel.hidden=true; });
+      return { set:function(items){
+          panel.innerHTML='<label><input type="checkbox" data-all checked> <b>Todos</b></label><div class="ms-sep"></div>'+
+            items.map(function(it){ return '<label><input type="checkbox" value="'+esc(it.v)+'" checked> '+esc(it.t)+'</label>'; }).join("");
+          var all=panel.querySelector("[data-all]"), boxes=[].slice.call(panel.querySelectorAll("input:not([data-all])"));
+          function get(){ var chk=boxes.filter(function(b){return b.checked;}); return chk.length===boxes.length? null : new Set(chk.map(function(b){return b.value;})); }
+          function sync(){ var n=boxes.filter(function(b){return b.checked;}).length; all.checked=n===boxes.length;
+            host.querySelector(".ms-txt").textContent = n===boxes.length? label+": todos" : n===0? label+": ninguno" : label+": "+n+" de "+boxes.length; }
+          all.addEventListener("change",function(){ boxes.forEach(function(b){b.checked=all.checked;}); sync(); onChange(get()); });
+          boxes.forEach(function(b){ b.addEventListener("change",function(){ sync(); onChange(get()); }); });
+          sync();
+        } };
+    };
+  })();
+  var msCad=msBuild($("msCad"),"Cadena",function(s){ selCad=s; render(); });
+  var msProm=msBuild($("msProm"),"Promotor",function(s){ selProm=s; render(); });
+  var selCad=null, selProm=null;
+  var sortKey="fecha", sortDir=-1, lastDet=[];
+
+  function setStatus(msg,cls){ var s=$("statusLine"); s.textContent=msg; s.className="status-line"+(cls?" "+cls:""); }
+  function modLine(){
+    var parts=[]; if(DATA && DATA.mod) parts.push("Quiebres: datos al "+new Date(DATA.mod).toLocaleString("es-PE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false}));
+    $("modLine").textContent=parts.join(" · ");
+  }
+  function xls(rows, name, sheet){
+    if(!rows.length){ setStatus("No hay filas para descargar con los filtros actuales.","err"); return; }
+    var wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),sheet||"DATOS"); XLSX.writeFile(wb,name);
+  }
+
+  function monthsAvail(){
+    var set={}; if(DATA) DATA.visits.forEach(function(v){ set[mesKeyOf(v.fecha)]=1; }); return Object.keys(set).sort().reverse();
+  }
+  function refreshControls(){
+    var meses=monthsAvail(), cur=$("fMes").value;
+    $("fMes").innerHTML = meses.map(function(k){ return '<option value="'+k+'">'+mesLabel(k)+'</option>'; }).join("") || '<option value="">(sin datos)</option>';
+    $("fMes").value = meses.indexOf(cur)!==-1? cur : (meses[0]||"");
+    var cads={}, proms={};
+    DATA.checks.forEach(function(c){ cads[c.cadena]=1; proms[c.promotor]=1; });
+    msCad.set(Object.keys(cads).sort().map(function(c){return {v:c,t:c};})); selCad=null;
+    msProm.set(Object.keys(proms).sort().map(function(p){return {v:p,t:p};})); selProm=null;
+  }
+
+  function passBase(r){
+    var mes=$("fMes").value, cat=$("fCat").value, zona=$("fZona").value;
+    if(mes && mesKeyOf(r.fecha)!==mes) return false;
+    if(cat && categoriaDe(r.sku)!==cat) return false;
+    if(zona && r.zona!==zona) return false;
+    if(selCad && !selCad.has(r.cadena)) return false;
+    if(selProm && !selProm.has(r.promotor)) return false;
+    return true;
+  }
+  function filteredChecks(){ return DATA.checks.filter(passBase); }
+  function filteredQuiebres(){ return DATA.quiebres.filter(passBase); }
+
+  var charts=[];
+  function destroyCharts(){ charts.forEach(function(c){ try{c.destroy();}catch(e){} }); charts=[]; }
+  function mkChart(id,cfg){ var cv=$(id); if(!cv) return; var c=new Chart(cv,cfg); charts.push(c); return c; }
+
+  function render(){
+    if(!DATA) return;
+    var checks=filteredChecks(), quiebres=filteredQuiebres();
+    var storesEval={}; checks.forEach(function(c){ storesEval[c.store]=1; });
+    var storesQ={}; quiebres.forEach(function(q){ storesQ[q.store]=1; });
+
+    // universo del padrón (si está cargado) para el mes elegido
+    var universo=null, mesSel=$("fMes").value, zonaSel=$("fZona").value;
+    if(PAD && PAD.snaps && PAD.snaps.length && mesSel){
+      var snap=BAT.padFor(PAD.snaps, new Date(+mesSel.split("-")[0], +mesSel.split("-")[1]-1, 1));
+      if(snap){
+        var rows=snap.data.rows;
+        if(selCad) rows=rows.filter(function(r){ return selCad.has(r.cadena); });
+        if(zonaSel) rows=rows.filter(function(r){ return r.zona===zonaSel; });
+        universo=rows.length;
+      }
+    }
+
+    var tasa=pct(quiebres.length,checks.length);
+    var cadMap={}; checks.forEach(function(c){ var m=cadMap[c.cadena]||(cadMap[c.cadena]={checks:0,q:0}); m.checks++; });
+    quiebres.forEach(function(q){ cadMap[q.cadena].q++; });
+    var cadCritica="—", cadCriticaTasa=0;
+    Object.keys(cadMap).forEach(function(c){ if(cadMap[c].checks>=10){ var t=pct(cadMap[c].q,cadMap[c].checks); if(t>cadCriticaTasa){ cadCriticaTasa=t; cadCritica=c; } } });
+    var skuMap={}; quiebres.forEach(function(q){ skuMap[q.sku]=(skuMap[q.sku]||0)+1; });
+    var skuTop=Object.keys(skuMap).sort(function(a,b){return skuMap[b]-skuMap[a];})[0]||"—";
+
+    var kpis=[
+      kpi("Tasa de quiebre", tasa.toFixed(1)+"%", quiebres.length.toLocaleString("es-PE")+" de "+checks.length.toLocaleString("es-PE")+" evaluaciones", tasa>=40?"crit":""),
+      kpi("Tiendas afectadas", Object.keys(storesQ).length.toLocaleString("es-PE"), "de "+Object.keys(storesEval).length.toLocaleString("es-PE")+" evaluadas"+(universo!=null?" · "+universo.toLocaleString("es-PE")+" en el padrón":"")),
+      kpi("Cadena más crítica", cadCritica, cadCritica!=="—"? cadCriticaTasa.toFixed(1)+"% de quiebre (mín. 10 eval.)":"sin suficientes evaluaciones"),
+      kpi("SKU más crítico", skuTop, skuTop!=="—"? skuMap[skuTop]+" quiebres":"")
+    ];
+    $("kpis").innerHTML = kpis.join("");
+
+    destroyCharts();
+    var accent=cssv("--accent"), ok=cssv("--ok"), warn=cssv("--warn"), crit=cssv("--crit"), border=cssv("--surface"), grid=cssv("--border");
+
+    // tasa de quiebre por semana (del mes filtrado; si no hay mes, agrupa por semana ISO de todo el rango)
+    var semMap={};
+    checks.forEach(function(c){ var k=mesKeyOf(c.fecha)+"-S"+semOf(c.fecha); var s=semMap[k]||(semMap[k]={checks:0,q:0}); s.checks++; });
+    quiebres.forEach(function(q){ var k=mesKeyOf(q.fecha)+"-S"+semOf(q.fecha); semMap[k].q++; });
+    var semKeys=Object.keys(semMap).sort();
+    mkChart("chartSemana",{type:"line",data:{labels:semKeys.map(function(k){return k.slice(5);}),
+      datasets:[{label:"% quiebre",data:semKeys.map(function(k){return pct(semMap[k].q,semMap[k].checks);}),borderColor:crit,backgroundColor:crit,tension:.25}]},
+      options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,max:100,grid:{color:grid},ticks:{callback:function(v){return v+"%";}}},x:{grid:{display:false}}},plugins:{legend:{display:false}}}});
+
+    // quiebres por cadena
+    var cadKeys=Object.keys(cadMap).sort(function(a,b){return cadMap[b].q-cadMap[a].q;});
+    mkChart("chartCadena",{type:"bar",data:{labels:cadKeys,datasets:[{data:cadKeys.map(function(k){return cadMap[k].q;}),backgroundColor:crit}]},
+      options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,grid:{color:grid}},y:{grid:{display:false}}}}});
+
+    // top sku
+    var skuKeys=Object.keys(skuMap).sort(function(a,b){return skuMap[b]-skuMap[a];}).slice(0,12);
+    mkChart("chartSku",{type:"bar",data:{labels:skuKeys,datasets:[{data:skuKeys.map(function(k){return skuMap[k];}),backgroundColor:skuKeys.map(function(k){var c=categoriaDe(k); return c==="VUSE"?accent:c==="VELO"?warn:crit;})}]},
+      options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,grid:{color:grid}},y:{grid:{display:false}}}}});
+
+    // motivo
+    var motMap={}; quiebres.forEach(function(q){ motMap[q.motivo]=(motMap[q.motivo]||0)+1; });
+    var motKeys=Object.keys(motMap).sort(function(a,b){return motMap[b]-motMap[a];});
+    if(motKeys.length){
+      mkChart("chartMotivo",{type:"doughnut",data:{labels:motKeys,datasets:[{data:motKeys.map(function(k){return motMap[k];}),backgroundColor:[crit,warn,accent,ok].slice(0,motKeys.length),borderColor:border,borderWidth:2}]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"bottom"}}}});
+    } else {
+      var cv=$("chartMotivo"); if(cv){ var ctx=cv.getContext("2d"); ctx.clearRect(0,0,cv.width,cv.height); ctx.fillStyle=cssv("--text-muted"); ctx.font="12px sans-serif"; ctx.fillText("Sin quiebres con estos filtros.",10,20); }
+    }
+
+    renderCrit(checks, quiebres);
+    renderPivot(checks, quiebres);
+    lastDet=quiebres; renderDetalle();
+
+    $("filterHint").textContent = checks.length.toLocaleString("es-PE")+" evaluaciones SKU×tienda con los filtros actuales.";
+    reportHeight();
+  }
+
+  /* ───────── tiendas más críticas ───────── */
+  function renderCrit(checks, quiebres){
+    var byStore={};
+    checks.forEach(function(c){ var s=byStore[c.store]||(byStore[c.store]={tienda:c.tienda,cadena:c.cadena,distrito:c.distrito,checks:0,q:0}); s.checks++; });
+    quiebres.forEach(function(q){ byStore[q.store].q++; });
+    var rows=Object.keys(byStore).map(function(k){ var r=byStore[k]; return {store:k,tienda:r.tienda,cadena:r.cadena,distrito:r.distrito,checks:r.checks,q:r.q,tasa:pct(r.q,r.checks)}; })
+      .filter(function(r){ return r.checks>=3 && r.q>0; })
+      .sort(function(a,b){ return b.tasa-a.tasa || b.q-a.q; });
+    $("critCount").textContent=rows.length.toLocaleString("es-PE");
+    var MAX=30;
+    lastCrit=rows;
+    $("tblCrit").innerHTML = !rows.length? '<div class="empty">Sin tiendas con quiebres en este filtro.</div>' :
+      '<table><thead><tr><th>Cadena</th><th>Tienda</th><th class="num">Código</th><th>Distrito</th><th class="num">Quiebres</th><th class="num">Evaluados</th><th class="num">Tasa</th></tr></thead><tbody>'+
+      rows.slice(0,MAX).map(function(r){ return '<tr><td>'+esc(r.cadena)+'</td><td>'+esc(r.tienda)+'</td><td class="num mono">'+esc(r.store)+'</td><td>'+esc(r.distrito)+'</td><td class="num mono">'+r.q+'</td><td class="num mono">'+r.checks+'</td><td class="num mono"><span class="pill '+(r.tasa>=60?"crit":r.tasa>=30?"warn":"ok")+'">'+r.tasa.toFixed(1)+'%</span></td></tr>'; }).join("")+
+      '</tbody></table>';
+  }
+  var lastCrit=[];
+  $("critDown").addEventListener("click",function(){
+    xls(lastCrit.map(function(r){ return {CADENA:r.cadena,TIENDA:r.tienda,CODIGO_TT:r.store,DISTRITO:r.distrito,QUIEBRES:r.q,EVALUADOS:r.checks,TASA_PCT:r.tasa}; }),"quiebres-tiendas-criticas"+($("fMes").value?"-"+$("fMes").value:"")+".xlsx","CRITICAS");
+  });
+
+  /* ───────── pivot tienda × sku por semana ───────── */
+  var lastPivot=[];
+  function renderPivot(checks, quiebres){
+    var key=function(r){ return r.store+"|"+r.skuId; };
+    var byKey={};
+    checks.forEach(function(c){ var k=key(c); var e=byKey[k]||(byKey[k]={tienda:c.tienda,cadena:c.cadena,store:c.store,sku:c.sku,sem:{}}); });
+    quiebres.forEach(function(q){ var k=key(q); var e=byKey[k]; if(!e) return; e.sem[semOf(q.fecha)]=true; });
+    var rows=Object.keys(byKey).map(function(k){ return byKey[k]; }).filter(function(e){ return Object.keys(e.sem).length>0; })
+      .sort(function(a,b){ return Object.keys(b.sem).length-Object.keys(a.sem).length || a.tienda.localeCompare(b.tienda); });
+    lastPivot=rows;
+    $("pivCount").textContent=rows.length.toLocaleString("es-PE");
+    var MAX=300;
+    if(!rows.length){ $("tblPivot").innerHTML='<div class="empty">Sin quiebres con estos filtros.</div>'; return; }
+    $("tblPivot").innerHTML = '<table><thead><tr><th>Cadena</th><th>Tienda</th><th class="num">Código</th><th>SKU</th>'+
+      [1,2,3,4,5].map(function(n){ return '<th class="num">SEM'+n+'</th>'; }).join("")+'<th class="num">Total</th></tr></thead><tbody>'+
+      rows.slice(0,MAX).map(function(e){ var tot=Object.keys(e.sem).length;
+        return '<tr><td>'+esc(e.cadena)+'</td><td>'+esc(e.tienda)+'</td><td class="num mono">'+esc(e.store)+'</td><td>'+esc(e.sku)+'</td>'+
+        [1,2,3,4,5].map(function(n){ return e.sem[n]? '<td class="cq" style="color:var(--crit)">●</td>' : '<td class="cq">—</td>'; }).join("")+
+        '<td class="num mono"><b>'+tot+'</b></td></tr>'; }).join("")+'</tbody></table>'+
+      (rows.length>MAX? '<div class="empty">Mostrando '+MAX+' de '+rows.length+' combinaciones — el Excel baja todas.</div>' : '');
+  }
+  $("pivDown").addEventListener("click",function(){
+    xls(lastPivot.map(function(e){ var tot=Object.keys(e.sem).length; return {CADENA:e.cadena,TIENDA:e.tienda,CODIGO_TT:e.store,SKU:e.sku,
+      SEM1:e.sem[1]?"QUIEBRE":"",SEM2:e.sem[2]?"QUIEBRE":"",SEM3:e.sem[3]?"QUIEBRE":"",SEM4:e.sem[4]?"QUIEBRE":"",SEM5:e.sem[5]?"QUIEBRE":"",TOTAL_SEMANAS:tot}; }),
+      "quiebres-pivot-semana"+($("fMes").value?"-"+$("fMes").value:"")+".xlsx","PIVOT");
+  });
+
+  /* ───────── detalle ───────── */
+  function detRows(){
+    var q=norm($("dBuscar").value);
+    var rows=lastDet.filter(function(b){ return !q || norm([b.tienda,b.store,b.sku,b.promotor,b.cadena,b.distrito,b.motivo].join(" ")).indexOf(q)!==-1; });
+    rows=rows.slice().sort(function(a,b){
+      var x=sortKey==="fecha"? a.fecha.getTime() : a[sortKey];
+      var y=sortKey==="fecha"? b.fecha.getTime() : b[sortKey];
+      if(typeof x==="string") return sortDir*x.localeCompare(y);
+      return sortDir*((x||0)-(y||0));
+    });
+    return rows;
+  }
+  function renderDetalle(){
+    var rows=detRows(), MAX=500;
+    $("detCount").textContent=rows.length.toLocaleString("es-PE");
+    $("detSub").textContent=rows.length.toLocaleString("es-PE")+" quiebres"+(rows.length>MAX?" (se muestran los "+MAX+" más recientes; el Excel baja todos)":"");
+    var cols=[["cadena","Cadena",0],["tienda","Tienda",0],["store","Código",1],["sku","SKU",0],["motivo","Motivo",0],["promotor","Promotor",0],["fecha","Fecha",0]];
+    $("tblDetalle").innerHTML = !rows.length? '<div class="empty">Sin registros con ese filtro.</div>' :
+      '<table><thead><tr>'+cols.map(function(c){ return '<th class="sortable'+(c[2]?' num':'')+'" data-k="'+c[0]+'">'+c[1]+(sortKey===c[0]?(sortDir<0?" ▾":" ▴"):"")+'</th>'; }).join("")+'</tr></thead><tbody>'+
+      rows.slice(0,MAX).map(function(b){ return '<tr><td>'+esc(b.cadena)+'</td><td>'+esc(b.tienda)+'</td><td class="num mono">'+esc(b.store)+'</td><td>'+esc(b.sku)+'</td><td>'+esc(b.motivo)+'</td><td>'+esc(b.promotor)+'</td><td class="mono">'+ymd(b.fecha)+'</td></tr>'; }).join("")+
+      '</tbody></table>';
+    [].forEach.call($("tblDetalle").querySelectorAll("th.sortable"),function(th){
+      th.addEventListener("click",function(){ var k=th.getAttribute("data-k"); if(sortKey===k) sortDir=-sortDir; else { sortKey=k; sortDir=(k==="fecha")?-1:1; } renderDetalle(); });
+    });
+  }
+  $("dBuscar").addEventListener("input",renderDetalle);
+  $("detDown").addEventListener("click",function(){
+    xls(detRows().map(function(b){ return {CADENA:b.cadena,TIENDA:b.tienda,CODIGO_TT:b.store,DISTRITO:b.distrito,SKU:b.sku,CATEGORIA:categoriaDe(b.sku),MOTIVO:b.motivo,PROMOTOR:b.promotor,FECHA:ymd(b.fecha)}; }),"quiebres-detalle"+($("fMes").value?"-"+$("fMes").value:"")+".xlsx","DETALLE");
+  });
+
+  /* ───────── carga de datos ───────── */
+  function applyData(data, mod, label){
+    if(data.error){ setStatus("⚠ "+data.error,"err"); return false; }
+    DATA=data; DATA.mod=mod;
+    $("emptyBanner").hidden=true; $("app").hidden=false; $("fileName").textContent=label;
+    refreshControls(); modLine(); render();
+    setStatus("✓ "+Object.keys(data.skus).length+" SKUs · "+data.visits.length.toLocaleString("es-PE")+" visitas · "+data.checks.length.toLocaleString("es-PE")+" evaluaciones · "+data.quiebres.length.toLocaleString("es-PE")+" quiebres","ok");
+    return true;
+  }
+  $("fileInput").addEventListener("change",function(e){
+    var f=e.target.files[0]; e.target.value=""; if(!f) return;
+    setStatus("Leyendo "+f.name+"…");
+    f.arrayBuffer().then(function(buf){
+      var data=BAT.parseQuiebre(BAT.readBook(buf));
+      applyData(data, new Date(f.lastModified), f.name);
+    }).catch(function(err){ setStatus("⚠ No se pudo leer el archivo: "+err.message,"err"); });
+  });
+
+  var busy=false;
+  function connectLive(silent){
+    if(busy) return; busy=true; if(!silent) setStatus("Conectando con SharePoint…");
+    BAT.auth.token(!silent).then(function(token){
+      var url=BAT.links.quiebre;
+      if(!url){ setStatus("⚠ Falta configurar el link de SharePoint de 582-QUIEBRE DE STOCK en site-config.js. Mientras tanto usa la carga manual.","err"); return; }
+      setStatus("Descargando datos de SharePoint…");
+      return BAT.fetchParsed(token,url,{kind:"quiebre",parse:BAT.parseQuiebre}).then(function(res){
+        if(!applyData(res.data, res.mod, "SharePoint · 582-QUIEBRE DE STOCK (en vivo)")) return;
+        $("msRefreshBtn").hidden=false;
+      });
+    }).catch(function(e){ var m=(e&&e.message)||""; if(silent&&(m==="no-account"||m==="silent-failed")) return; setStatus("⚠ "+BAT.errorText(e,"quiebres.html"),"err"); })
+    .finally(function(){ busy=false; });
+  }
+  // Padrón: se carga aparte (no bloquea la vista) para poder mostrar universo/cobertura cuando esté disponible.
+  function loadPadronSilently(){
+    BAT.auth.token(false).then(function(token){ return BAT.padSnapshots(token); }).then(function(r){
+      if(r.snaps.length){ PAD=r; if(DATA) render(); }
+    }).catch(function(){});
+  }
+  $("msConnectBtn").addEventListener("click",function(){ connectLive(false); loadPadronSilently(); });
+  $("msRefreshBtn").addEventListener("click",function(){ connectLive(false); loadPadronSilently(); });
+  ["fMes","fCat","fZona"].forEach(function(id){ $(id).addEventListener("change",render); });
+
+  /* ───────── arranque ───────── */
+  var row=$("msRow");
+  BAT.auth.init().then(function(acc){
+    if(!BAT.links.quiebre && typeof msal==="undefined"){ row.hidden=true; return; }
+    row.hidden=false;
+    if(acc){ $("msUser").textContent=acc.username; connectLive(true); loadPadronSilently(); }
+  });
+
+  function reportHeight(){
+    try{ if(window.parent && window.parent!==window){ var h=Math.max(document.documentElement.scrollHeight, document.body.scrollHeight); window.parent.postMessage({__quiebres:"height",h:h},"*"); } }catch(e){}
+  }
+  if(window.ResizeObserver){ try{ new ResizeObserver(reportHeight).observe(document.documentElement); }catch(e){} }
+  window.addEventListener("load",reportHeight); window.addEventListener("resize",reportHeight);
+  setTimeout(reportHeight,300);
+})();
+</script>
+</body>
+</html>

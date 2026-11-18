@@ -300,6 +300,56 @@
     return { batches:batches, sospechosos:sospechosos, visits:visits, skus:skuName };
   };
 
+  /* Quiebre de stock (VUSE/VELO/FMC): una fila por visita de auditoría de quiebre. Por cada SKU la pregunta es
+     "¿CUMPLE STOCK MIN?" (columna base "…-CUMPLE STOCK MIN-id:NNNN" = "1" cumple / "0" no cumple = QUIEBRE /
+     vacío = ese SKU no se evaluó en esa visita — confirmado cruzando base vs motivo: cuando base="0" siempre
+     viene al menos un motivo lleno, cuando base="1" o vacío nunca). Si no cumple, el motivo (multi-opción) viene
+     en una o más columnas "…-¿MOTIVO?-id:NNNN-OPCION-<idOpcion>" (cada opción fija del catálogo — "DESPACHO NO
+     LLEGÓ", "ROBO EN TIENDA", "OTRO" — tiene su propia columna por SKU; el texto de la opción ya viene en la
+     celda cuando está marcada). La columna "…-CUMPLE STOCK MIN-id:NNNN-Comment" trae a veces un número chico
+     (posible detalle de unidades restantes) solo cuando no cumple — no se usa para el cálculo del quiebre en sí. */
+  B.parseQuiebre = function(wb){
+    var sn=wb.SheetNames[0];
+    var head=headerRow(wb.Sheets[sn]).map(String);
+    var idx={}; head.forEach(function(h,i){ if(!(h in idx)) idx[h]=i; });
+    if(idx.store_id===undefined || idx.fecha===undefined) return {error:"No encontré las columnas store_id / fecha."};
+    var skuName={}, baseIdx={}, opcionIdx={}, m;
+    head.forEach(function(h,i){
+      if((m=/^(.*)-CUMPLE STOCK MIN-id:(\d+)$/.exec(h))){ baseIdx[+m[2]]=i; skuName[+m[2]]=m[1].trim(); }
+      else if((m=/-id:(\d+)-OPCION-\d+$/.exec(h))){ var id=+m[1]; (opcionIdx[id]=opcionIdx[id]||[]).push(i); }
+    });
+    var ids=Object.keys(skuName).map(Number);
+    if(!ids.length) return {error:"No encontré columnas de SKU (…-CUMPLE STOCK MIN-id:NNNN)."};
+    var iStore=idx.store_id, iName=idx.fullname, iType=idx.type, iReg=idx.region, iUbi=idx.ubigeo, iDist=idx.district, iAud=idx.auditor, iFecha=idx.fecha;
+    var rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:"",raw:true,blankrows:false});
+    var checks=[], quiebres=[], visits=[];
+    for(var r=1;r<rows.length;r++){
+      var row=rows[r];
+      var fecha=B.parseDate(row[iFecha]); if(!fecha) continue;
+      if(B.histCut && fecha<B.histCut) continue;
+      var store=B.clean(row[iStore]); if(!store) continue;
+      var base={ store:store, tienda:B.clean(row[iName]), cadena:B.cadenaDe(row[iName]), zona:B.zonaDe(row[iType],row[iReg],row[iUbi]),
+        distrito:B.clean(row[iDist]), promotor:B.clean(row[iAud]), fecha:fecha };
+      var any=false;
+      ids.forEach(function(id){
+        var v=B.clean(row[baseIdx[id]]);
+        if(v!=="0" && v!=="1") return;
+        any=true;
+        var rec={store:base.store,tienda:base.tienda,cadena:base.cadena,zona:base.zona,distrito:base.distrito,promotor:base.promotor,fecha:base.fecha,
+          skuId:id, sku:skuName[id], cumple:v==="1"};
+        checks.push(rec);
+        if(v==="0"){
+          var motivos=[];
+          (opcionIdx[id]||[]).forEach(function(oi){ var mv=B.clean(row[oi]); if(mv) motivos.push(mv); });
+          rec.motivo = motivos.length? motivos.join(" / ") : "Sin motivo";
+          quiebres.push(rec);
+        }
+      });
+      if(any) visits.push(base);
+    }
+    return { checks:checks, quiebres:quiebres, visits:visits, skus:skuName };
+  };
+
   /* ───────── padrón de cada mes ───────── */
   /* Descarga los padrones configurados en site-config.js (links.padrones): cada archivo vale para SU mes (el de octubre es octubre,
      el de noviembre es noviembre). Devuelve {snaps:[{mes,nombre,data,mod,fallback}] ordenados por mes, errors:[texto]}. */
