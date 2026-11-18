@@ -36,8 +36,8 @@ window.SITE = {
     ],
     // Conteos: 582-CONTEO STOCK - VUSE Y VELO.xlsx
     conteo: 'https://ttauditperu-my.sharepoint.com/:x:/g/personal/acastro_ttauditperu_onmicrosoft_com/IQBW4iX4l6HLT7KzLjRQGErsAQLn1Bt7PbUO-AROtQQMTec?e=gaAI0U',
-    // Quiebres: 582-QUIEBRE DE STOCK.xlsx (TODO: falta el link de SharePoint — pedírselo a la usuaria, mientras tanto solo carga manual)
-    quiebre: ''
+    // Quiebres: 582-QUIEBRE DE STOCK.xlsx
+    quiebre: 'https://ttauditperu-my.sharepoint.com/:x:/g/personal/acastro_ttauditperu_onmicrosoft_com/IQDfN1lEY-pnSaK2LbDspD8dAQbwivb6hgT2Y2ZeV9-mOV4?e=ELBWjQ'
   },
   vistas: [
     { id: 'padron',     seccion: 'Promotoría', icono: '🗂️', titulo: 'Padrón',
