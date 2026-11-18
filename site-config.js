@@ -32,7 +32,7 @@ window.SITE = {
     // adentro trae la pestaña «BBDD NOVIEMBRE», que es la que se lee). Reemplaza el link anterior ("...USAR.xlsx").
     padrones: [
       { mes: '2026-10', nombre: 'Octubre 2026',   url: 'https://ttauditperu-my.sharepoint.com/personal/acastro_ttauditperu_onmicrosoft_com/Documents/MATHIAS/PADRONES/Propuesta%20Padron%20Promotoria%20Octubre%202026%20VF.xlsx' },
-      { mes: '2026-11', nombre: 'Noviembre 2026', url: 'https://ttauditperu-my.sharepoint.com/:x:/g/personal/acastro_ttauditperu_onmicrosoft_com/IQBafj3WZ5W-SaXpP-jh7CT2ATS-Sf6ZRK8q7BDx9U-qN7c?e=uyxz7h' }
+      { mes: '2026-11', nombre: 'Noviembre 2026', url: 'https://ttauditperu-my.sharepoint.com/:x:/g/personal/acastro_ttauditperu_onmicrosoft_com/IQBafj3WZ5W-SaXpP-jh7CT2ATS-Sf6ZRK8q7BDx9U-qN7c?e=RYD1Rk' }
     ],
     // Conteos: 582-CONTEO STOCK - VUSE Y VELO.xlsx
     conteo: 'https://ttauditperu-my.sharepoint.com/:x:/g/personal/acastro_ttauditperu_onmicrosoft_com/IQBW4iX4l6HLT7KzLjRQGErsAQLn1Bt7PbUO-AROtQQMTec?e=gaAI0U',

@@ -7,6 +7,8 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
 :root{
   --bg:#f4f6fa; --surface:#FFFFFF; --surface-2:#f2f5fa; --text:#1b2a47; --text-muted:#6c7a92; --border:#dde4ee;
@@ -143,6 +145,14 @@ footer{font-size:12px; color:var(--text-muted); border-top:1px solid var(--borde
   <div class="kpi-strip" id="kpis"></div>
 
   <div class="alert-box" id="sospechososAlert" hidden></div>
+
+  <section class="block" id="avanceSection">
+    <div class="sec-head"><h2>🎯 Avance de conteo por promotor <span class="chip" id="avanceCount"></span></h2>
+      <button class="btn ghost" id="pendPdf" type="button">⬇ PDF de tiendas pendientes</button></div>
+    <p class="sub">Tiendas del padrón del mes que ya enviaron conteo (al menos 1 SKU) frente a las que aún no. El PDF lista, por promotor y por día de visita, las tiendas sin conteo; respeta los filtros de arriba (mes, cadena, zona y promotor).</p>
+    <div class="chart-card"><div class="chart-wrap" id="avanceWrap" style="height:280px"><canvas id="chartAvance"></canvas></div>
+      <div class="empty" id="avanceMsg" hidden></div></div>
+  </section>
 
   <section class="block">
     <h2>📈 Avance semanal por categoría</h2>
@@ -343,6 +353,7 @@ footer{font-size:12px; color:var(--text-muted); border-top:1px solid var(--borde
       var cv=$("chartCobertura"); if(cv){ var ctx=cv.getContext("2d"); ctx.clearRect(0,0,cv.width,cv.height); ctx.fillStyle=cssv("--text-muted"); ctx.font="12px sans-serif"; ctx.fillText("Carga el padrón (vista Padrón) para ver esto.",10,20); }
     }
 
+    renderAvance();
     renderVenc(batches);
     lastDet=batches; renderDetalle();
     renderSosp();
@@ -350,6 +361,79 @@ footer{font-size:12px; color:var(--text-muted); border-top:1px solid var(--borde
     $("filterHint").textContent = "Lotes sospechosos (cantidad > 400 en un solo lote) no entran a estos totales ni gráficos — revísalos abajo.";
     reportHeight();
   }
+
+  /* ───────── avance de conteo por promotor + PDF de pendientes ───────── */
+  // Universo = padrón del mes (promotor/día/frecuencia vigentes = último trío de columnas). "Con conteo" = la tienda tiene alguna visita con conteo ese mes.
+  function avancePorPromotor(){
+    var mes=$("fMes").value;
+    if(!DATA || !mes || !PAD || !PAD.snaps || !PAD.snaps.length) return null;
+    var snap=BAT.padFor(PAD.snaps, new Date(+mes.split("-")[0], +mes.split("-")[1]-1, 1)); if(!snap) return null;
+    var ti=snap.data.labels.length-1, zona=$("fZona").value;
+    var promSet=selProm? new Set(Array.from(selProm).map(norm)) : null;
+    var done={}; DATA.visits.forEach(function(v){ if(mesKeyOf(v.fecha)===mes) done[v.store]=1; });
+    var by={};
+    snap.data.rows.forEach(function(r){
+      var t=r.t[ti], p=(t && t.promotor) || "(SIN PROMOTOR)";
+      if(selCad && !selCad.has(r.cadena)) return;
+      if(zona && r.zona!==zona) return;
+      if(promSet && !promSet.has(norm(p))) return;
+      var g=by[p]||(by[p]={name:p,total:0,done:0,pend:[]});
+      g.total++;
+      if(done[r.store]) g.done++; else g.pend.push({store:r.store, tienda:r.estacion||r.nombre||r.store, dia:t?t.dia:"", frec:t?t.frec:""});
+    });
+    return Object.keys(by).map(function(k){ return by[k]; }).sort(function(a,b){ return pct(b.done,b.total)-pct(a.done,a.total) || a.name.localeCompare(b.name); });
+  }
+  function renderAvance(){
+    var g=avancePorPromotor(), wrap=$("avanceWrap"), msg=$("avanceMsg");
+    $("pendPdf").disabled = !g;
+    if(!g){ wrap.hidden=true; msg.hidden=false; $("avanceCount").textContent="";
+      msg.textContent="Para ver el avance por promotor hace falta el padrón del mes. Conéctate con SharePoint (botón de arriba) para cargarlo."; return; }
+    wrap.hidden=false; msg.hidden=true;
+    var tot=g.reduce(function(a,x){return a+x.total;},0), dn=g.reduce(function(a,x){return a+x.done;},0);
+    $("avanceCount").textContent = dn.toLocaleString("es-PE")+" de "+tot.toLocaleString("es-PE")+" tiendas · "+pct(dn,tot).toFixed(1)+"%";
+    wrap.style.height = Math.max(200, g.length*28+70)+"px";
+    mkChart("chartAvance",{type:"bar",
+      data:{labels:g.map(function(x){ return x.name+" — "+pct(x.done,x.total).toFixed(0)+"% ("+x.done+"/"+x.total+")"; }),
+        datasets:[{label:"Con conteo",data:g.map(function(x){return x.done;}),backgroundColor:cssv("--ok")},
+                  {label:"Sin conteo",data:g.map(function(x){return x.total-x.done;}),backgroundColor:cssv("--crit")}]},
+      options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"top"}},
+        scales:{x:{stacked:true,beginAtZero:true,grid:{color:cssv("--border")},title:{display:true,text:"Tiendas"}},y:{stacked:true,grid:{display:false}}}}});
+  }
+  var DIA_ORD=["lunes","martes","miercoles","jueves","viernes","sabado","domingo"], DIA_TXT={lunes:"LUNES",martes:"MARTES",miercoles:"MIÉRCOLES",jueves:"JUEVES",viernes:"VIERNES",sabado:"SÁBADO",domingo:"DOMINGO"};
+  $("pendPdf").addEventListener("click",function(){
+    var g=avancePorPromotor();
+    if(!g){ setStatus("⚠ Falta el padrón del mes para saber qué tiendas no tienen conteo.","err"); return; }
+    if(!window.jspdf){ setStatus("⚠ No cargó la librería de PDF (revisa tu conexión) y vuelve a intentar.","err"); return; }
+    var list=g.filter(function(p){ return p.pend.length; });
+    if(!list.length){ setStatus("✓ No hay tiendas pendientes con los filtros actuales.","ok"); return; }
+    var doc=new window.jspdf.jsPDF({unit:"pt",format:"a4"}), W=doc.internal.pageSize.getWidth(), H=doc.internal.pageSize.getHeight();
+    var hoy=new Date(), fecha=hoy.getDate()+"."+(hoy.getMonth()+1);
+    list.forEach(function(p,i){
+      if(i>0) doc.addPage();
+      var y=64;
+      doc.setFont("helvetica","bold"); doc.setFontSize(24); doc.setTextColor(31,56,100); doc.text(p.name.toUpperCase(),W/2,y,{align:"center"});
+      y+=22; doc.setFont("helvetica","normal"); doc.setFontSize(11); doc.setTextColor(120,120,120);
+      doc.text("Pendientes de conteo al "+fecha+" · "+p.pend.length+(p.pend.length===1?" tienda":" tiendas"),W/2,y,{align:"center"});
+      y+=40;
+      var dias={}; p.pend.forEach(function(x){ var k=DIA_ORD.indexOf(x.dia)>=0? x.dia : "_"; (dias[k]||(dias[k]=[])).push(x); });
+      DIA_ORD.concat(["_"]).forEach(function(k){
+        var items=dias[k]; if(!items) return;
+        items.sort(function(a,b){ return a.tienda.localeCompare(b.tienda); });
+        if(y>H-110){ doc.addPage(); y=50; }
+        doc.setFont("helvetica","bold"); doc.setFontSize(16); doc.setTextColor(31,78,121);
+        doc.text((DIA_TXT[k]||"SIN DÍA ASIGNADO")+" ("+items.length+(items.length===1?" tienda":" tiendas")+")",40,y);
+        doc.autoTable({startY:y+8, margin:{left:40,right:40,top:40,bottom:40}, theme:"grid",
+          head:[["TIENDA","FRECUENCIA"]], body:items.map(function(x){ return [x.tienda, x.frec||"—"]; }),
+          headStyles:{fillColor:[31,78,121],textColor:255,fontSize:10,fontStyle:"bold"},
+          styles:{fontSize:10,cellPadding:5,lineColor:[160,180,205],lineWidth:0.5,textColor:[20,20,20]},
+          alternateRowStyles:{fillColor:[220,230,241]},
+          columnStyles:{1:{halign:"center",cellWidth:140}}});
+        y=doc.lastAutoTable.finalY+26;
+      });
+    });
+    doc.save("conteos-pendientes-"+$("fMes").value+".pdf");
+    setStatus("✓ PDF generado: "+list.length+" promotor(es), "+list.reduce(function(a,p){return a+p.pend.length;},0)+" tiendas pendientes.","ok");
+  });
 
   /* ───────── tabla de unidades por mes de vencimiento (una por año) ───────── */
   function renderVenc(batches){
