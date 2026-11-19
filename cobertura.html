@@ -209,6 +209,7 @@ footer{font-size:12px; color:var(--text-muted); border-top:1px solid var(--borde
         <button class="btn" id="motSave" type="button">💾 Guardar motivos</button>
         <button class="btn ghost" id="motDown" type="button">⬇ Descargar Excel</button>
         <button class="btn ghost" id="critDown" type="button" title="Tiendas no cubiertas, con las críticas marcadas">⬇ Excel de no visitadas (críticas)</button>
+        <button class="btn ghost" id="critOnlyDown" type="button" title="Solo las tiendas críticas, con día de visita, frecuencia y días sin visita">⬇ Excel solo críticas</button>
         <span class="status-line" id="motStatus"></span>
       </div>
       <p class="sub" style="margin-top:6px">Escribe el motivo de cada tienda no cubierta (o elige uno de la lista). Se guardan en <code>582-MOTIVOS-NO-COBERTURA.xlsx</code>, en la misma carpeta de SharePoint que Información General (hoja <code>MOTIVOS</code>), y se vuelven a mostrar aquí.</p>
@@ -978,11 +979,12 @@ window.COB_REF_Q1 = "2026-10-26";
     return p.visitas.slice().sort(function(a,b){return a.fecha-b.fecha;}).map(function(v){ return ymd(v.fecha).slice(5)+(v.promotor?" ("+v.promotor+")":""); }).join(", ");
   }
   function difTxt(p){ var d=visitaDif(p); return p.estado!=="otro"? "" : (d<0? "adelantada "+(-d)+" día(s)" : "atrasada "+d+" día(s)"); }
+  var modalKey="";
   function openDetalle(key, promotor){
     var items=lastProg.filter(PICK[key]).filter(function(p){ return !promotor || p.promotor===promotor; })
       .sort(function(a,b){ return a.fecha-b.fecha || a.promotor.localeCompare(b.promotor) || (a.r.estacion||"").localeCompare(b.r.estacion||""); });
     $("modalDown").hidden=false;
-    modalItems=items; modalName="cobertura-"+key+(promotor?"-"+promotor.replace(/\s+/g,"_"):"");
+    modalKey=key; modalItems=items; modalName="cobertura-"+key+(promotor?"-"+promotor.replace(/\s+/g,"_"):"");
     $("modalTitle").textContent=PICK_TXT[key]+(promotor?" · "+promotor:"");
     $("modalSub").textContent=items.length+" tienda(s)"+(key==="otro"?" · «Otro día» = la tienda sí se visitó en el rango, pero no el día que le tocaba":"")+(key==="v"?" · vencidas = cubiertas + no cubiertas":"");
     var MAXM=400, otro=key==="otro";
@@ -1018,6 +1020,31 @@ window.COB_REF_Q1 = "2026-10-26";
         "MOTIVO NO COBERTURA":(MOT[motKey(p)]||{}).motivo||"", "FOTO COUNTER":(p.fotos&&p.fotos.counter)||"" };
     });
   }
+  /* Excel de tiendas críticas: una fila por tienda (si cayó en varias semanas del rango, la más reciente), con día de visita, frecuencia
+     y en COMENTARIOS cuántos días lleva sin visitarse (hasta hoy, según el historial de Información General cargado). */
+  function critExcel(items){
+    var today=new Date(), best={}; today.setHours(0,0,0,0);
+    items.forEach(function(p){ var k=p.promotor+"|"+p.r.store; if(!best[k] || p.fecha>best[k].fecha) best[k]=p; });
+    var rows=Object.keys(best).map(function(k){
+      var p=best[k], vs=(INFO && INFO.byStore[p.r.store]) || [], ult=null;
+      vs.forEach(function(v){ if(v.fecha<=today && (!ult || v.fecha>ult)) ult=v.fecha; });
+      var dias=ult? Math.round((today-ult)/864e5) : null;
+      return { _d:dias==null?1e9:dias, PROMOTOR:p.promotor, "CÓDIGO":p.r.store, TIENDA:p.r.estacion, CADENA:window.BAT.cadenaDe(p.r.estacion||p.r.nombre), DISTRITO:p.r.distrito, ZONA:p.r.zona,
+        "DÍA DE VISITA":DIAS_T[p.di], FRECUENCIA:p.frec, "ÚLTIMA VISITA":ult? ymd(ult) : "sin visitas registradas", "DÍAS SIN VISITA":dias==null? "" : dias,
+        COMENTARIOS: dias==null? "Sin visitas registradas en el historial cargado" : "Sin visita hace "+dias+" día"+(dias===1?"":"s")+" (última: "+ymd(ult)+")",
+        "MOTIVO NO COBERTURA":(MOT[motKey(p)]||{}).motivo||"" };
+    });
+    rows.sort(function(a,b){ return a.PROMOTOR.localeCompare(b.PROMOTOR) || b._d-a._d || (a.TIENDA||"").localeCompare(b.TIENDA||""); });
+    rows.forEach(function(r){ delete r._d; });
+    return rows;
+  }
+  function downloadCrit(items,name){
+    var rows=critExcel(items);
+    if(!rows.length){ motStatus("No hay tiendas críticas con los filtros actuales.","err"); return; }
+    var ws=XLSX.utils.json_to_sheet(rows); ws["!cols"]=[{wch:24},{wch:10},{wch:34},{wch:14},{wch:18},{wch:7},{wch:13},{wch:13},{wch:16},{wch:15},{wch:46},{wch:30}];
+    var wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"CRÍTICAS"); XLSX.writeFile(wb,name);
+    motStatus("Descargado: "+rows.length+" tiendas críticas.","ok");
+  }
   function downloadItems(items,name,sheet){
     if(!items.length){ motStatus("No hay tiendas para descargar con los filtros actuales.","err"); return; }
     var wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(itemsExcel(items)),sheet||"TIENDAS"); XLSX.writeFile(wb,name);
@@ -1025,7 +1052,8 @@ window.COB_REF_Q1 = "2026-10-26";
   $("modalClose").addEventListener("click",closeModal);
   $("modal").addEventListener("click",function(e){ if(e.target===$("modal")) closeModal(); });
   document.addEventListener("keydown",function(e){ if(e.key==="Escape" && !$("modal").hidden) closeModal(); });
-  $("modalDown").addEventListener("click",function(){ downloadItems(modalItems, modalName+".xlsx", "DETALLE"); });
+  $("modalDown").addEventListener("click",function(){ if(modalKey==="crit") downloadCrit(modalItems, modalName+".xlsx"); else downloadItems(modalItems, modalName+".xlsx", "DETALLE"); });
+  $("critOnlyDown").addEventListener("click",function(){ downloadCrit(lastProg.filter(PICK.crit), "tiendas-criticas-"+ymd(new Date())+".xlsx"); });
   $("critDown").addEventListener("click",function(){
     // todas las no cubiertas del rango; las críticas primero
     var items=lastProg.filter(PICK.nc).sort(function(a,b){ return (b.critica?1:0)-(a.critica?1:0) || (b.dias==null?1e9:b.dias)-(a.dias==null?1e9:a.dias) || a.promotor.localeCompare(b.promotor); });

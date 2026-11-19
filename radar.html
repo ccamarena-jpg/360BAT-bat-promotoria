@@ -1352,7 +1352,7 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
      Dentro de BAT 360 Promotoría el radar ya no depende del Excel de VALIDACIÓN: arma las mismas filas (tienda programada por
      semana, ¿se visitó?, ¿fue efectiva?, motivo) cruzando el padrón (día y frecuencia Q1/Q2) con Información General.
      La carga manual del Excel de VALIDACIÓN sigue disponible como alternativa. */
-  var USE_INFO = !!(window.BAT && BAT.links && BAT.links.padron && BAT.links.infoGeneral);
+  var USE_INFO = !!(window.BAT && BAT.links && (BAT.links.padron || (BAT.links.padrones && BAT.links.padrones.length)) && BAT.links.infoGeneral);
   function cadenaCorta(estacion, cadena){ var m=/^([^\-–]{2,22}?)\s*[-–]/.exec(estacion||""); return String(m? m[1] : (cadena||"")).trim().toUpperCase(); }
   function recordsFromInfo(snaps, info){      // snaps: padrones por mes ({mes,data}); cada semana usa el padrón de su mes
     if(!snaps.length) return [];
@@ -1382,7 +1382,7 @@ try{ var L0=window.parent!==window && window.parent.SITE && window.parent.SITE.l
     BAT.auth.token(!silent).then(function(token){
       status.textContent="Descargando padrón e Información General…"; status.className="status-line";
       return Promise.all([
-        BAT.padSnapshots(token),
+        BAT.padSnapshots(token,{soloVigente:true}),   // manda el padrón vigente; el historial son las visitas de Información General
         BAT.fetchParsed(token,BAT.links.infoGeneral,{prefer:"Consulta1",kind:"info",parse:BAT.parseInfo}) ]);
     }).then(function(r){
       var snaps=r[0].snaps, info=r[1].data;
