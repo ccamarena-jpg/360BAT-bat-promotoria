@@ -353,8 +353,10 @@
   /* ───────── padrón de cada mes ───────── */
   /* Descarga los padrones configurados en site-config.js (links.padrones): cada archivo vale para SU mes (el de octubre es octubre,
      el de noviembre es noviembre). Devuelve {snaps:[{mes,nombre,data,mod,fallback}] ordenados por mes, errors:[texto]}. */
-  B.padSnapshots = function(token){
+  B.padSnapshots = function(token, opts){
     var cfg=(B.links.padrones||[]).filter(function(x){ return x && x.url && x.mes; });
+    // opts.soloVigente: solo el padrón del mes más reciente (las vistas que no comparan meses no necesitan los anteriores ni sus permisos)
+    if(opts && opts.soloVigente && cfg.length>1){ cfg=cfg.slice().sort(function(a,b){ return a.mes.localeCompare(b.mes); }).slice(-1); }
     if(!cfg.length && B.links.padron){ var d=new Date(); cfg=[{mes:d.getFullYear()+"-"+B.pad2(d.getMonth()+1),nombre:"Padrón",url:B.links.padron}]; }
     return Promise.all(cfg.map(function(c){
       var base={prefer:/^BBDD/i,kind:"pad:"+c.mes,parse:B.parsePadron};

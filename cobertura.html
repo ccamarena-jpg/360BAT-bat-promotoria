@@ -439,8 +439,9 @@ window.COB_REF_Q1 = "2026-10-26";
     set[ymd(mondayOf(new Date()))]=1;
     return Object.keys(set).sort().reverse();
   }
-  /* Padrón de la semana: si hay un padrón por mes (site-config.js → links.padrones), cada semana usa el de su mes
-     (octubre para semanas de octubre, noviembre para las de noviembre). Con un solo padrón (carga manual) se usa ese. */
+  /* Padrón: manda el VIGENTE (el del mes más reciente de site-config.js → links.padrones) para todas las semanas — define qué tiendas,
+     promotor, día y frecuencia hay que cubrir. Lo histórico que importa son las VISITAS (Información General, por tienda y sin importar
+     quién la visitó), que es lo que permite ver tiendas sin visita hace semanas. Los padrones de meses anteriores no se cargan aquí. */
   var PADS=[];
   function snapFor(monday){
     if(PADS.length>1){ var s=window.BAT.padFor(PADS,monday); return {rows:s.data.rows, ti:s.data.labels.length-1}; }
@@ -1242,12 +1243,12 @@ window.COB_REF_Q1 = "2026-10-26";
       setStatus("Descargando datos de SharePoint…");
       var infoP=fetchBook(token,MS.infoUrl,"Consulta1",null,"info"); infoP.catch(function(){});   // se descarga en paralelo al padrón
       // padrones: uno por mes (cada archivo vale para su mes); si el sitio no los define, se usa el único link de padrón
-      var padP = (window.BAT && BAT.links && BAT.links.padrones) ? BAT.padSnapshots(token).then(function(r){
+      var padP = (window.BAT && BAT.links && BAT.links.padrones) ? BAT.padSnapshots(token,{soloVigente:true}).then(function(r){
           if(!r.snaps.length) throw new Error(r.errors[0]||"No se pudo cargar ningún padrón.");
           PADS=r.snaps; var last=r.snaps[r.snaps.length-1];
           PAD=last.data; MOD.pad=last.mod||null; updateNames(); show(); showMod();
           $("fileName").textContent="Padrones: "+r.snaps.map(function(s){return s.nombre;}).join(" + ")+" · Información General";
-          setStatus("✓ Padrones por mes: "+r.snaps.map(function(s){ return s.nombre+" ("+s.data.rows.length.toLocaleString("es-PE")+" tiendas)"; }).join(", ")+(r.errors.length?" · ⚠ "+r.errors.join("; "):""),"ok");
+          setStatus("✓ Padrón vigente: "+r.snaps.map(function(s){ return s.nombre+" ("+s.data.rows.length.toLocaleString("es-PE")+" tiendas)"; }).join(", ")+(r.errors.length?" · ⚠ "+r.errors.join("; "):""),"ok");
           return true; })
         : fetchBook(token,MS.padUrl).then(function(wb){ return applyWb(wb,"pad"); });
       return padP.then(function(ok){ if(!ok) return; $("msRefreshBtn").hidden=false; startAuto();
