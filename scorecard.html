@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scorecard promotores · BAT 360</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#f4f6fa; --surface:#FFFFFF; --surface-2:#f2f5fa; --text:#1b2a47; --text-muted:#6c7a92; --border:#dde4ee;
+  --accent:#1d3b78; --accent-soft:#e2ecfb; --ok:#1f9d57; --ok-bg:#e0f5e8; --warn:#a9760a; --warn-bg:#fcf0d6;
+  --crit:#d6453d; --crit-bg:#fbe3e1; --pend:#b7c0cf;
+  --shadow: 0 1px 3px rgba(21,38,74,.06), 0 4px 14px rgba(21,38,74,.05);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#16181A; --surface:#1F2224; --surface-2:#26292B; --text:#EDEBE5; --text-muted:#9C9A92; --border:#33363A;
+    --accent:#7FB4D4; --accent-soft:#20343E; --ok:#6FCB99; --ok-bg:#173425; --warn:#E3B15C; --warn-bg:#3A2C10;
+    --crit:#EF8A83; --crit-bg:#3D1E1C; --pend:#5b6270; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#16181A; --surface:#1F2224; --surface-2:#26292B; --text:#EDEBE5; --text-muted:#9C9A92; --border:#33363A;
+  --accent:#7FB4D4; --accent-soft:#20343E; --ok:#6FCB99; --ok-bg:#173425; --warn:#E3B15C; --warn-bg:#3A2C10;
+  --crit:#EF8A83; --crit-bg:#3D1E1C; --pend:#5b6270; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box;}
+body{background:var(--bg); color:var(--text); font-family:"IBM Plex Sans",'Segoe UI',system-ui,sans-serif;
+  padding-inline:18px; padding-block:14px 28px; max-width:1180px; margin:0 auto;}
+.mono{font-family:"IBM Plex Mono", ui-monospace, monospace; font-variant-numeric:tabular-nums;}
+h1,h2,h3{text-wrap:balance; margin:0;}
+a{color:var(--accent);}
+header.top{display:flex; flex-wrap:wrap; gap:16px 24px; justify-content:space-between; align-items:flex-start;
+  padding-bottom:18px; border-bottom:1px solid var(--border); margin-bottom:18px;}
+.brand{display:flex; flex-direction:column; gap:4px; min-width:220px;}
+.brand .eyebrow{font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-muted); font-weight:600;}
+.brand h1{font-size:26px; font-weight:700;}
+.brand p{margin:2px 0 0; color:var(--text-muted); font-size:13.5px; max-width:52ch;}
+.upload-panel{display:flex; flex-direction:column; gap:8px; background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; padding:14px 16px; box-shadow:var(--shadow); min-width:280px; flex:1 1 320px; max-width:460px;}
+.upload-row{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+.btn{background:var(--accent); color:var(--surface); border:none; border-radius:8px; padding:9px 14px;
+  font-family:inherit; font-weight:600; font-size:13.5px; cursor:pointer;}
+.btn.ghost{background:transparent; color:var(--accent); border:1px solid var(--accent);}
+.btn:hover{filter:brightness(1.06);}
+.file-name{font-size:12.5px; color:var(--text-muted); word-break:break-all;}
+input[type=file]{display:none;}
+.status-line{font-size:12.5px; color:var(--text-muted);}
+.status-line.err{color:var(--crit);} .status-line.ok{color:var(--ok);}
+.empty-banner{display:flex; gap:10px; align-items:center; background:var(--accent-soft); color:var(--accent);
+  border:1px solid var(--accent); border-radius:10px; padding:12px 16px; font-size:13.5px; margin-bottom:20px;}
+.alert-box{display:flex; gap:10px; align-items:flex-start; background:var(--warn-bg); color:var(--text);
+  border:1px solid var(--warn); border-radius:10px; padding:12px 16px; font-size:13px; margin-bottom:16px;}
+.alert-box b{color:var(--warn);}
+.filter-bar{display:flex; flex-wrap:wrap; gap:12px 16px; align-items:flex-end; background:var(--surface);
+  border:1px solid var(--border); border-radius:12px; padding:12px 16px; box-shadow:var(--shadow); margin-bottom:10px;}
+.filter-field{display:flex; flex-direction:column; gap:4px;}
+.filter-field label{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); font-weight:600;}
+.filter-field select, .filter-field input[type=date], .filter-field input[type=search]{font-family:inherit; font-size:13px; padding:7px 10px; border-radius:8px;
+  border:1px solid var(--border); background:var(--bg); color:var(--text); min-width:150px;}
+.filter-hint{font-size:12px; color:var(--text-muted); margin:0 0 16px;}
+.ms{position:relative;}
+.ms-btn{font-family:inherit; font-size:13px; padding:7px 10px; border-radius:8px; border:1px solid var(--border);
+  background:var(--bg); color:var(--text); min-width:200px; text-align:left; cursor:pointer; display:flex; gap:8px; align-items:center;}
+.ms-btn .caret{margin-left:auto; color:var(--text-muted);}
+.ms-panel{position:absolute; z-index:30; top:calc(100% + 4px); left:0; min-width:280px; max-height:320px; overflow:auto;
+  background:var(--surface); border:1px solid var(--border); border-radius:10px; box-shadow:var(--shadow); padding:6px;}
+.ms-panel label{display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:6px; font-size:13px; color:var(--text);
+  cursor:pointer; font-weight:500; text-transform:none; letter-spacing:0;}
+.ms-panel label:hover{background:var(--surface-2);}
+.ms-panel .ms-sep{height:1px; background:var(--border); margin:5px 2px;}
+.ms-panel input[type=checkbox]{margin:0; accent-color:var(--accent);}
+.kpi-strip{display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:12px; margin-bottom:22px;}
+.kpi{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; box-shadow:var(--shadow);}
+.kpi .k-label{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); font-weight:600;}
+.kpi .k-value{font-size:26px; font-weight:700; margin-top:4px;}
+.kpi .k-sub{font-size:12px; color:var(--text-muted); margin-top:2px;}
+section.block{margin-bottom:26px;}
+section.block > h2, section.block > div > h2{font-size:17px; margin-bottom:4px; display:flex; align-items:center; gap:8px;}
+section.block .sub{font-size:12.5px; color:var(--text-muted); margin:0 0 12px;}
+.chart-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(380px,1fr)); gap:16px;}
+.chart-card{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; box-shadow:var(--shadow);}
+.chart-card h3{font-size:13.5px; font-weight:600; margin-bottom:10px;}
+.chart-wrap{position:relative; height:280px;}
+.chip{font-size:11px; padding:2px 7px; border-radius:999px; background:var(--surface-2); color:var(--text-muted); border:1px solid var(--border);}
+.pill{font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; white-space:nowrap;}
+.pill.ok{background:var(--ok-bg); color:var(--ok);} .pill.warn{background:var(--warn-bg); color:var(--warn);} .pill.crit{background:var(--crit-bg); color:var(--crit);}
+.table-wrap{background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); overflow:auto; max-height:560px;}
+table{border-collapse:collapse; width:100%; font-size:12.8px;}
+th,td{padding:7px 11px; text-align:left; border-bottom:1px solid var(--border); vertical-align:top;}
+th{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); background:var(--surface-2); position:sticky; top:0;}
+td.num, th.num{text-align:right; font-family:"IBM Plex Mono",monospace;}
+tr:last-child td{border-bottom:none;}
+tr.tot td{font-weight:700; background:var(--surface-2); border-top:2px solid var(--border);}
+th.sortable{cursor:pointer; user-select:none;} th.sortable:hover{color:var(--accent);}
+.empty{padding:18px; color:var(--text-muted); font-size:13px;}
+.sec-head{display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; justify-content:space-between; margin-bottom:4px;}
+footer{font-size:12px; color:var(--text-muted); border-top:1px solid var(--border); padding-top:12px; margin-top:24px;}
+[hidden]{display:none !important;}
+
+.ind-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px;}
+.ind{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; box-shadow:var(--shadow);}
+.ind .k-label{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); font-weight:600;}
+.ind .k-value{margin-top:6px;} .ind .k-sub{font-size:12px; color:var(--text-muted); margin:4px 0 8px;}
+.ind .ext{font-size:12.5px; margin-top:3px;} .ok-t{color:var(--ok);} .crit-t{color:var(--crit);}
+.muted{color:var(--text-muted);} .s{font-size:11px;}
+.weights{display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:10px 14px; margin-bottom:12px; font-size:13px;}
+.weights .wl{font-weight:600; color:var(--text-muted);} .weights .wi{display:flex; gap:6px; align-items:center;}
+.weights input{width:58px; font-family:inherit; font-size:13px; padding:4px 6px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);}
+.weights .dis{opacity:.5;}
+.total{display:inline-block; font-size:15px; font-weight:700; padding:3px 10px; border-radius:8px; background:var(--accent-soft); color:var(--accent);}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <span class="eyebrow">BAT 360 · Promotoría</span>
+    <h1>Scorecard de promotores</h1>
+    <p>Resumen mensual por promotor de cada indicador que evaluamos: cobertura, efectividad, conteos e implementación de materiales POP. Se arma con el padrón vigente y los Excel de SharePoint.</p>
+  </div>
+  <div class="upload-panel">
+    <div class="upload-row" id="msRow" hidden>
+      <button class="btn" id="msConnectBtn" type="button">🔗 Conectar con SharePoint</button>
+      <button class="btn ghost" id="msRefreshBtn" type="button" hidden>↻ Actualizar</button>
+      <span class="file-name" id="msUser"></span>
+    </div>
+    <div class="upload-row">
+      <label class="btn ghost" for="fileInput">📂 Cargar Excel(s) a mano</label>
+      <input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls" multiple>
+    </div>
+    <div class="file-name" id="fileName">Sin archivos cargados</div>
+    <div class="status-line" id="statusLine"></div>
+  </div>
+</header>
+
+<div class="empty-banner" id="emptyBanner">
+  <span>🏆</span>
+  <span>Conecta con SharePoint para armar el scorecard. A mano puedes cargar juntos el <b>padrón</b>, <b>Información General</b>, <b>Ejecución POP</b> y <b>Conteo de stock</b>; el sistema reconoce cuál es cada uno.</span>
+</div>
+
+<div id="app" hidden>
+  <div class="filter-bar">
+    <div class="filter-field"><label for="fMes">Mes</label><select id="fMes"></select></div>
+    <div class="filter-field"><label for="fZona">Zona</label><select id="fZona"><option value="">Todas</option><option>LIMA</option><option>KC</option><option>NKC</option></select></div>
+    <div class="filter-field"><label for="fBuscar">Promotor</label><input type="search" id="fBuscar" placeholder="Buscar promotor…" style="min-width:200px"></div>
+  </div>
+  <p class="filter-hint" id="filterHint"></p>
+
+  <section class="block">
+    <h2>📊 Resumen por indicador</h2>
+    <p class="sub">Valor del equipo en el mes y los extremos entre promotores (mejor y más bajo). Los promotores con muy pocos casos no entran como extremo.</p>
+    <div class="ind-grid" id="indCards"></div>
+  </section>
+
+  <section class="block">
+    <div class="sec-head"><h2>🏆 Scorecard por promotor <span class="chip" id="promCount"></span></h2>
+      <button class="btn ghost" id="scDown" type="button">⬇ Excel</button></div>
+    <p class="sub">Cada indicador muestra su % y su puntaje (provisional: % ÷ 10, escala 0 a 10). El puntaje total es el promedio ponderado de los indicadores con dato; ajusta los pesos aquí abajo (peso 0 = no cuenta). Clic en un encabezado para ordenar.</p>
+    <div class="weights" id="weights"></div>
+    <div class="table-wrap" id="tblScore"></div>
+  </section>
+</div>
+
+<footer>
+  <details>
+    <summary style="cursor:pointer;font-weight:600;color:var(--accent)">ℹ️ Cómo se calcula esto</summary>
+    <div style="font-size:12.5px;color:var(--text-muted);line-height:1.6;padding-top:8px;max-width:78ch">
+      <p><b>Base:</b> las tiendas y el promotor son los del <b>padrón vigente</b> (último trío de columnas). Las visitas, conteos y materiales se atribuyen a la tienda y, por ella, al promotor que la tiene en el padrón, sin importar quién la visitó (los nombres del auditor en los queries no siempre coinciden con el padrón).</p>
+      <p><b>Cobertura</b> = tiendas programadas en el mes (según día y frecuencia Q1/Q2) cuyo día ya pasó y que tuvieron al menos una visita en esa semana ÷ tiendas programadas vencidas. <b>Efectividad</b> = visitas con local abierto y auditoría permitida ÷ tiendas cubiertas (misma regla que el Radar).</p>
+      <p><b>Conteos</b> = tiendas del padrón del promotor con al menos un SKU contado en el mes ÷ tiendas del padrón del promotor.</p>
+      <p><b>Materiales</b> = implementaciones ÷ tienda×material visitadas en el mes, solo para los materiales del mes definidos en <code>config/materiales.json</code> (si el mes no tiene lista, todos). Todavía no usa el scope por tienda de la vista Materiales.</p>
+      <p><b>Conectados</b> (% de tiendas que llegaron a meta) queda pendiente: se agregará cuando exista su vista.</p>
+      <p><b>Puntaje:</b> por ahora es provisional (% ÷ 10); la regla definitiva de puntos se define aparte.</p>
+      <p>Los archivos se leen en tu navegador con tu cuenta de Microsoft; no se guardan en la plataforma.</p>
+    </div>
+  </details>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+<script src="shared.js"></script>
+<script>
+(function(){
+  "use strict";
+  var $=function(id){ return document.getElementById(id); };
+  var esc=BAT.esc, norm=BAT.norm, clean=BAT.clean, ymd=BAT.ymd, pad2=BAT.pad2, mondayOf=BAT.mondayOf, addDays=BAT.addDays;
+  var MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+  function mesLabel(k){ var p=k.split("-"); return MESES[+p[1]-1]+" "+p[0]; }
+  function mesKeyOf(d){ return d.getFullYear()+"-"+pad2(d.getMonth()+1); }
+  function pct(a,b){ return b? Math.round(a*1000/b)/10 : null; }
+  function sem(p){ return p>=90?"ok":p>=70?"warn":"crit"; }
+  var ALIAS={ "willgerson pajita":"wilgerson pajita" };
+  function pkey(n){ var k=norm(n); return ALIAS[k]||k; }
+
+  // indicadores (Conectados queda como columna pendiente)
+  var INDS=[
+    {k:"cob", t:"Cobertura",    sub:"tiendas programadas con visita"},
+    {k:"efe", t:"Efectividad",  sub:"visitas efectivas sobre cubiertas"},
+    {k:"con", t:"Conteos",      sub:"tiendas del padrón con conteo"},
+    {k:"mat", t:"Materiales",   sub:"implementado sobre tienda×material"}
+  ];
+  var W={cob:1,efe:1,con:1,mat:1};
+  try{ var w0=JSON.parse(localStorage.getItem("bat_score_w")||"null"); if(w0) INDS.forEach(function(i){ if(typeof w0[i.k]==="number") W[i.k]=w0[i.k]; }); }catch(e){}
+  function saveW(){ try{ localStorage.setItem("bat_score_w",JSON.stringify(W)); }catch(e){} }
+
+  var D={pad:null, info:null, con:null, pop:null};
+  var CFG=null, lastRows=[], sortKey="total", sortDir=-1;
+
+  function setStatus(msg,cls){ var s=$("statusLine"); s.textContent=msg; s.className="status-line"+(cls?" "+cls:""); }
+  function xls(rows,name,sheet){
+    if(!rows.length){ setStatus("No hay filas para descargar.","err"); return; }
+    var wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),sheet||"DATOS"); XLSX.writeFile(wb,name);
+  }
+
+  /* ───────── Ejecución POP (versión liviana: solo lo que necesita el scorecard) ───────── */
+  function hdr(ws){ if(!ws||!ws["!ref"]) return []; var r=XLSX.utils.decode_range(ws["!ref"]); var rows=XLSX.utils.sheet_to_json(ws,{header:1,range:{s:{r:r.s.r,c:r.s.c},e:{r:r.s.r,c:r.e.c}},defval:"",raw:true}); return rows[0]||[]; }
+  function parsePop(wb){
+    var sn=null;
+    for(var i=0;i<wb.SheetNames.length;i++){ var h=hdr(wb.Sheets[wb.SheetNames[i]]).map(String); if(h.some(function(c){return /IMPLEMENTO-id:\d+$/i.test(c);}) && h.indexOf("store_id")!==-1){ sn=wb.SheetNames[i]; break; } }
+    if(!sn) return {error:"No encontré columnas de material (…-IMPLEMENTO-id:NNNN)."};
+    var rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:"",raw:true,blankrows:false}), head=rows[0].map(String);
+    function ci(n){ return head.indexOf(n); }
+    var iS=ci("store_id"), iF=ci("fecha"), iA=ci("auditor"), iT=ci("type"), iR=ci("region"), iU=ci("ubigeo");
+    if(iF<0) return {error:"Faltan las columnas store_id / fecha."};
+    var cols=[]; head.forEach(function(h,i){ var m=/-IMPLEMENTO-id:(\d+)$/i.exec(h); if(m) cols.push({id:+m[1],i:i}); });
+    var recs=[];
+    for(var r=1;r<rows.length;r++){
+      var row=rows[r], f=BAT.parseDate(row[iF]); if(!f) continue;
+      if(BAT.histCut && f<BAT.histCut) continue;
+      var store=clean(row[iS]); if(!store) continue;
+      var zona=BAT.zonaDe(row[iT],row[iR],row[iU]), prom=clean(row[iA]);
+      for(var k=0;k<cols.length;k++){
+        var s=clean(row[cols[k].i]); if(s==="") continue;
+        var impl=(s==="1"||/^s[ií]$/i.test(s))?1:(s==="0"||/^no$/i.test(s))?0:-1; if(impl<0) continue;
+        recs.push({store:store,fecha:f,promotor:prom,zona:zona,mat:cols[k].id,impl:impl});
+      }
+    }
+    return {recs:recs};
+  }
+
+  /* ───────── cálculo ───────── */
+  function monthsAvail(){
+    var set={}; if(D.info) D.info.visits.forEach(function(v){ set[mesKeyOf(v.fecha)]=1; });
+    if(D.con) D.con.visits.forEach(function(v){ set[mesKeyOf(v.fecha)]=1; });
+    if(D.pop) D.pop.recs.forEach(function(r){ set[mesKeyOf(r.fecha)]=1; });
+    return Object.keys(set).sort().reverse();
+  }
+  function compute(){
+    var mes=$("fMes").value;
+    if(!mes || !D.pad || !D.pad.snaps.length) return null;
+    var y=+mes.split("-")[0], m=+mes.split("-")[1];
+    var snap=BAT.padFor(D.pad.snaps,new Date(y,m-1,1)), rows=snap.data.rows, ti=snap.data.labels.length-1, zona=$("fZona").value;
+    var P={}, storeProm={};
+    function get(name){ return P[name]||(P[name]={name:name,tiendas:0,prog:0,cub:0,efe:0,conN:0,conD:0,matOk:0,matN:0}); }
+    var conSet={}; if(D.con) D.con.visits.forEach(function(v){ if(mesKeyOf(v.fecha)===mes) conSet[v.store]=1; });
+    rows.forEach(function(r){
+      var t=r.t[ti]; if(!t||!t.promotor) return; if(zona && r.zona!==zona) return;
+      var g=get(t.promotor); storeProm[r.store]=t.promotor; g.tiendas++;
+      if(D.con){ g.conD++; if(conSet[r.store]) g.conN++; }
+    });
+    // cobertura y efectividad: tienda programada (padrón) vs. visitas de Información General
+    if(D.info){
+      var today=new Date(); today.setHours(0,0,0,0);
+      var first=new Date(y,m-1,1), last=new Date(y,m,0);
+      for(var mon=mondayOf(first); mon<=last; mon=addDays(mon,7)){
+        var dom=addDays(mon,6);
+        BAT.programacion(rows,ti,mon).forEach(function(p){
+          if(p.fecha<first || p.fecha>last || p.fecha>=today) return;
+          if(zona && p.r.zona!==zona) return;
+          var vs=(D.info.byStore[p.r.store]||[]).filter(function(v){ return v.fecha>=mon && v.fecha<=dom; });
+          var g=get(p.promotor); g.prog++;
+          if(vs.length){ g.cub++; if(vs.some(function(v){return v.efectiva;})) g.efe++; }
+        });
+      }
+    }
+    // materiales: implementaciones del mes para los materiales definidos en config/materiales.json
+    var sinMatch=0;
+    if(D.pop){
+      var cm=CFG && CFG.meses && CFG.meses[mes], ids=cm && cm.materiales && cm.materiales.length? new Set(cm.materiales.map(function(x){return +x.id;})) : null;
+      D.pop.recs.forEach(function(r){
+        if(mesKeyOf(r.fecha)!==mes) return; if(ids && !ids.has(r.mat)) return;
+        var nm=storeProm[r.store]; if(!nm){ sinMatch++; return; }    // se atribuye al promotor del padrón vigente que tiene esa tienda (los nombres del auditor en Ejecución POP no calzan con el padrón)
+        var g=P[nm]; g.matN++; if(r.impl===1) g.matOk++;
+      });
+    }
+    var out=Object.keys(P).map(function(k){
+      var g=P[k];
+      g.cob=pct(g.cub,g.prog); g.efe_=pct(g.efe,g.cub); g.con=pct(g.conN,g.conD); g.mat=pct(g.matOk,g.matN);
+      var v={cob:g.cob, efe:g.efe_, con:g.con, mat:g.mat};
+      g.v=v; g.pts={}; var sw=0, sp=0;
+      INDS.forEach(function(i){ var x=v[i.k]; g.pts[i.k]= x==null? null : Math.round(x)/10; if(x!=null && W[i.k]>0){ sw+=W[i.k]; sp+=W[i.k]*g.pts[i.k]; } });
+      g.total= sw? Math.round(sp/sw*10)/10 : null;
+      return g;
+    });
+    return {rows:out, mes:mes, sinMatch:sinMatch};
+  }
+  function teamVal(rows,k){
+    var a=0,b=0;
+    rows.forEach(function(g){ if(k==="cob"){a+=g.cub;b+=g.prog;} else if(k==="efe"){a+=g.efe;b+=g.cub;} else if(k==="con"){a+=g.conN;b+=g.conD;} else {a+=g.matOk;b+=g.matN;} });
+    return {p:pct(a,b), a:a, b:b};
+  }
+  function den(g,k){ return k==="cob"? g.prog : k==="efe"? g.cub : k==="con"? g.conD : g.matN; }
+  function numr(g,k){ return k==="cob"? g.cub : k==="efe"? g.efe : k==="con"? g.conN : g.matOk; }
+  var MIN_CASOS={cob:5,efe:5,con:5,mat:5};
+
+  /* ───────── render ───────── */
+  function renderWeights(){
+    $("weights").innerHTML='<span class="wl">Pesos del total:</span>'+INDS.map(function(i){
+      return '<label class="wi">'+esc(i.t)+' <input type="number" min="0" max="10" step="0.5" value="'+W[i.k]+'" data-w="'+i.k+'"></label>'; }).join("")+
+      '<label class="wi dis" title="Pendiente: se agregará con su propia vista">Conectados <input type="number" value="0" disabled></label>';
+    [].forEach.call($("weights").querySelectorAll("input[data-w]"),function(inp){
+      inp.addEventListener("change",function(){ var v=parseFloat(inp.value); W[inp.getAttribute("data-w")]= isFinite(v)&&v>=0? v : 0; saveW(); render(); });
+    });
+  }
+  function ptsCell(g,k){
+    var x=g.v[k]; if(x==null) return '<td class="num mono"><span class="muted">—</span></td>';
+    return '<td class="num mono"><span class="pill '+sem(x)+'">'+x.toFixed(1)+'%</span> <b>'+g.pts[k].toFixed(1)+'</b><span class="muted"> pts</span><div class="muted s">'+numr(g,k)+' / '+den(g,k)+'</div></td>';
+  }
+  function render(){
+    var R=compute(); if(!R){ return; }
+    var all=R.rows, q=norm($("fBuscar").value);
+    // tarjetas de resumen por indicador (sobre todo el equipo, sin el filtro de búsqueda)
+    $("indCards").innerHTML=INDS.map(function(i){
+      var t=teamVal(all,i.k);
+      var el=all.filter(function(g){ return g.v[i.k]!=null && den(g,i.k)>=MIN_CASOS[i.k]; }).sort(function(a,b){ return b.v[i.k]-a.v[i.k]; });
+      var hi=el[0], lo=el.length>1? el[el.length-1] : null;
+      return '<div class="ind"><div class="k-label">'+esc(i.t)+'</div>'+
+        (t.p==null? '<div class="k-value mono">—</div><div class="k-sub">Sin datos para este mes</div>' :
+        '<div class="k-value mono"><span class="pill '+sem(t.p)+'" style="font-size:20px;padding:3px 10px">'+t.p.toFixed(1)+'%</span></div><div class="k-sub">'+t.a.toLocaleString("es-PE")+' de '+t.b.toLocaleString("es-PE")+' · '+esc(i.sub)+'</div>')+
+        (hi? '<div class="ext"><span class="ok-t">▲</span> '+esc(hi.name)+' <b>'+hi.v[i.k].toFixed(1)+'%</b></div>' : '')+
+        (lo? '<div class="ext"><span class="crit-t">▼</span> '+esc(lo.name)+' <b>'+lo.v[i.k].toFixed(1)+'%</b></div>' : '')+'</div>'; }).join("");
+    var rows=all.filter(function(g){ return !q || norm(g.name).indexOf(q)!==-1; });
+    rows.sort(function(a,b){
+      var x,y;
+      if(sortKey==="name"){ return sortDir*a.name.localeCompare(b.name); }
+      if(sortKey==="tiendas"){ x=a.tiendas; y=b.tiendas; }
+      else if(sortKey==="total"){ x=a.total; y=b.total; }
+      else { x=a.v[sortKey]; y=b.v[sortKey]; }
+      if(x==null && y==null) return a.name.localeCompare(b.name);
+      if(x==null) return 1; if(y==null) return -1;
+      return sortDir*(x-y) || a.name.localeCompare(b.name);
+    });
+    lastRows=rows;
+    $("promCount").textContent=rows.length+" promotores";
+    var cols=[["rank","#",1],["name","Promotor",0],["tiendas","Tiendas",1]].concat(INDS.map(function(i){ return [i.k,i.t,1]; })).concat([["conectados","Conectados",1],["total","Puntaje total",1]]);
+    $("tblScore").innerHTML=!rows.length? '<div class="empty">Sin promotores con los filtros actuales.</div>' :
+      '<table><thead><tr>'+cols.map(function(c){ var sortable=c[0]!=="rank"&&c[0]!=="conectados";
+        return '<th class="'+(c[2]?'num ':'')+(sortable?'sortable':'')+'" '+(sortable?'data-k="'+c[0]+'"':'')+'>'+c[1]+(sortKey===c[0]?(sortDir<0?" ▾":" ▴"):"")+'</th>'; }).join("")+'</tr></thead><tbody>'+
+      rows.map(function(g,idx){
+        return '<tr><td class="num mono muted">'+(idx+1)+'</td><td><b>'+esc(g.name)+'</b></td><td class="num mono">'+g.tiendas+'</td>'+
+          INDS.map(function(i){ return ptsCell(g,i.k); }).join("")+
+          '<td class="num mono"><span class="muted" title="Pendiente">—</span></td>'+
+          '<td class="num mono">'+(g.total==null? '<span class="muted">—</span>' : '<span class="total">'+g.total.toFixed(1)+'</span>')+'</td></tr>'; }).join("")+'</tbody></table>';
+    [].forEach.call($("tblScore").querySelectorAll("th.sortable"),function(th){
+      th.addEventListener("click",function(){ var k=th.getAttribute("data-k"); if(sortKey===k) sortDir=-sortDir; else { sortKey=k; sortDir= k==="name"? 1 : -1; } render(); });
+    });
+    var falt=[]; if(!D.info) falt.push("Información General (cobertura y efectividad)"); if(!D.con) falt.push("Conteo de stock"); if(!D.pop) falt.push("Ejecución POP (materiales)");
+    $("filterHint").textContent=(falt.length? "Faltan datos de: "+falt.join(", ")+". " : "")+(R.sinMatch? R.sinMatch+" registros de materiales de tiendas fuera del padrón vigente (o de otra zona) quedaron fuera. " : "")+"Padrón vigente: "+D.pad.snaps[D.pad.snaps.length-1].nombre+".";
+    reportHeight();
+  }
+  $("scDown").addEventListener("click",function(){
+    var rows=lastRows.map(function(g){ var o={PROMOTOR:g.name, TIENDAS_PADRON:g.tiendas};
+      INDS.forEach(function(i){ o[i.t.toUpperCase()+" %"]=g.v[i.k]==null?"":g.v[i.k]; o[i.t.toUpperCase()+" PTS"]=g.pts[i.k]==null?"":g.pts[i.k]; o[i.t.toUpperCase()+" CASOS"]=numr(g,i.k)+"/"+den(g,i.k); });
+      o["PUNTAJE TOTAL"]=g.total==null?"":g.total; return o; });
+    xls(rows,"scorecard-promotores-"+$("fMes").value+".xlsx","SCORECARD");
+  });
+  ["fMes","fZona"].forEach(function(id){ $(id).addEventListener("change",render); });
+  $("fBuscar").addEventListener("input",render);
+
+  function refreshMonths(){
+    var meses=monthsAvail(), cur=$("fMes").value;
+    $("fMes").innerHTML=meses.map(function(k){ return '<option value="'+k+'">'+mesLabel(k)+'</option>'; }).join("")||'<option value="">(sin datos)</option>';
+    $("fMes").value= meses.indexOf(cur)!==-1? cur : (meses[0]||"");
+  }
+  function ready(){
+    if(!D.pad) { setStatus("Falta el padrón vigente para armar el scorecard.","err"); return; }
+    if(!D.info && !D.con && !D.pop){ setStatus("Cargué el padrón; faltan Información General, Conteo y/o Ejecución POP.","err"); return; }
+    $("emptyBanner").hidden=true; $("app").hidden=false; refreshMonths(); renderWeights(); render();
+  }
+  function status(){
+    var parts=[]; if(D.pad) parts.push("padrón"); if(D.info) parts.push("Información General ("+D.info.visits.length.toLocaleString("es-PE")+" visitas)");
+    if(D.con) parts.push("conteos ("+D.con.visits.length.toLocaleString("es-PE")+" visitas)"); if(D.pop) parts.push("Ejecución POP ("+D.pop.recs.length.toLocaleString("es-PE")+" registros)");
+    return parts.join(" · ");
+  }
+
+  /* ───────── carga manual: reconoce cada archivo por su forma ───────── */
+  function detect(buf,name){
+    // se procesa solo la hoja útil (los Excel de queries traen hojas auxiliares enormes)
+    var names=XLSX.read(buf,{type:"array",bookSheets:true}).SheetNames;
+    var wb=BAT.readBook(buf, BAT.pickBBDD(names)? /^BBDD/i : (names.indexOf("Consulta1")!==-1? "Consulta1" : undefined));
+    if(BAT.pickBBDD(wb.SheetNames)){ var p=BAT.parsePadron(wb); if(!p.error) return {kind:"pad",data:p}; }
+    var pop=parsePop(wb); if(!pop.error) return {kind:"pop",data:pop};
+    var h=hdr(wb.Sheets[wb.SheetNames[0]]).map(String);
+    if(h.some(function(c){return /CANTIDAD-id:\d+/i.test(c);})){ var c=BAT.parseConteo(wb); if(!c.error) return {kind:"con",data:c}; }
+    var inf=BAT.parseInfo(wb); if(!inf.error) return {kind:"info",data:inf};
+    return {error:"No reconocí «"+name+"» (padrón, Información General, Ejecución POP o Conteo)."};
+  }
+  $("fileInput").addEventListener("change",function(e){
+    var files=[].slice.call(e.target.files); e.target.value=""; if(!files.length) return;
+    setStatus("Leyendo "+files.length+" archivo(s)…");
+    files.reduce(function(pr,f){ return pr.then(function(){ return f.arrayBuffer().then(function(buf){
+      var r=detect(buf,f.name); if(r.error){ setStatus("⚠ "+r.error,"err"); return; }
+      if(r.kind==="pad") D.pad={snaps:[{mes:"manual",nombre:"Padrón cargado a mano ("+f.name+")",data:r.data}]};
+      else D[r.kind]=r.data;
+    }); }); },Promise.resolve()).then(function(){ $("fileName").textContent=status()||"Sin archivos cargados"; ready(); if(D.pad) setStatus("✓ "+status(),"ok"); })
+    .catch(function(err){ setStatus("⚠ No se pudo leer el archivo: "+err.message,"err"); });
+  });
+
+  /* ───────── carga en vivo desde SharePoint ───────── */
+  var busy=false;
+  function connectLive(silent){
+    if(busy) return; busy=true; if(!silent) setStatus("Conectando con SharePoint…");
+    BAT.auth.token(!silent).then(function(token){
+      setStatus("Descargando padrón, Información General, Conteos y Ejecución POP…");
+      var L=BAT.links, errs=[];
+      function safe(label,p){ return p.catch(function(e){ errs.push(label+": "+BAT.errorText(e,"scorecard.html")); return null; }); }
+      return Promise.all([
+        safe("Padrón",BAT.padSnapshots(token,{soloVigente:true}).then(function(r){ if(!r.snaps.length) throw new Error(r.errors[0]||"sin padrón"); return r; })),
+        L.infoGeneral? safe("Información General",BAT.fetchParsed(token,L.infoGeneral,{prefer:"Consulta1",kind:"info",parse:BAT.parseInfo})) : Promise.resolve(null),
+        L.conteo?      safe("Conteos",BAT.fetchParsed(token,L.conteo,{kind:"conteo",parse:BAT.parseConteo})) : Promise.resolve(null),
+        L.popEjecucion?safe("Ejecución POP",BAT.fetchParsed(token,L.popEjecucion,{prefer:"Consulta1",kind:"scorepop",parse:parsePop})) : Promise.resolve(null),
+        fetch("config/materiales.json").then(function(r){ return r.ok? r.json() : null; }).catch(function(){ return null; })
+      ]).then(function(r){
+        if(r[0]) D.pad=r[0];
+        if(r[1] && r[1].data && !r[1].data.error) D.info=r[1].data;
+        if(r[2] && r[2].data && !r[2].data.error) D.con=r[2].data;
+        if(r[3] && r[3].data && !r[3].data.error) D.pop=r[3].data;
+        if(r[4]) CFG=r[4];
+        $("fileName").textContent="SharePoint · "+status(); $("msRefreshBtn").hidden=false;
+        ready();
+        if(D.pad) setStatus("✓ "+status()+(errs.length? " · ⚠ "+errs.join("; ") : ""), errs.length? "err":"ok"); else if(errs.length) setStatus("⚠ "+errs.join("; "),"err");
+      });
+    }).catch(function(e){ var m=(e&&e.message)||""; if(silent&&(m==="no-account"||m==="silent-failed")) return; setStatus("⚠ "+BAT.errorText(e,"scorecard.html"),"err"); })
+    .finally(function(){ busy=false; });
+  }
+  $("msConnectBtn").addEventListener("click",function(){ connectLive(false); });
+  $("msRefreshBtn").addEventListener("click",function(){ connectLive(false); });
+  // la config de materiales también se lee sin login (para la carga manual)
+  fetch("config/materiales.json").then(function(r){ return r.ok? r.json() : null; }).then(function(j){ if(j) CFG=j; }).catch(function(){});
+
+  var row=$("msRow");
+  BAT.auth.init().then(function(acc){
+    row.hidden=false;
+    if(acc){ $("msUser").textContent=acc.username; connectLive(true); }
+  });
+  window.__score={ D:D, setCfg:function(c){ CFG=c; }, ready:ready, compute:compute, detect:detect };
+
+  function reportHeight(){
+    try{ if(window.parent && window.parent!==window){ var h=Math.max(document.documentElement.scrollHeight, document.body.scrollHeight); window.parent.postMessage({__score:"height",h:h},"*"); } }catch(e){}
+  }
+  if(window.ResizeObserver){ try{ new ResizeObserver(reportHeight).observe(document.documentElement); }catch(e){} }
+  window.addEventListener("load",reportHeight); window.addEventListener("resize",reportHeight);
+  setTimeout(reportHeight,300);
+})();
+</script>
+</body>
+</html>

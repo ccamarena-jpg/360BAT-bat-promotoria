@@ -60,6 +60,9 @@ window.SITE = {
       src: 'conteos.html' },
     { id: 'quiebres',   seccion: 'Promotoría', icono: '📉', titulo: 'Quiebres de stock',
       sub: 'Tiendas que no cumplen el stock mínimo de VUSE, VELO y FMC, con motivo reportado por el promotor.',
-      src: 'quiebres.html' }
+      src: 'quiebres.html' },
+    { id: 'scorecard',  seccion: 'Promotoría', icono: '🏆', titulo: 'Scorecard promotores',
+      sub: 'Resumen mensual por promotor de cada indicador: cobertura, efectividad, conteos e implementación de materiales, con puntaje y ranking.',
+      src: 'scorecard.html' }
   ]
 };
